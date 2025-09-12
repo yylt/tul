@@ -1,11 +1,15 @@
 # tul
-- A dual-mode proxy tool designed for Cloudflare Worker, supporting Trojan over WebSocket and generic API proxy.
-- writeen in Rust, drived by wasm.
+A lightweight dual-mode Cloudflare Worker proxy written in Rust/WASM.
 
 ## ✨ Features
 
-1.  **Trojan over WebSocket**: Trojan proxy protocol over WebSocket transport layer, providing better stealth and anti-interference capabilities
-2.  **Generic API Proxy**: Proxy any API requests through a single endpoint, supporting various API services like OpenAI
+🔒 Trojan over WebSocket - Secure proxy protocol over WebSocket transport
+
+🌐 Generic API Proxy - Route any API through a single endpoint
+
+⚡ WASM Powered - High-performance Rust implementation
+
+🚀 Easy Deployment - One-click setup via GitHub Actions
 
 ## 📖 Usage Guide
 
