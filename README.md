@@ -1,5 +1,6 @@
-# tul
-A lightweight dual-mode Cloudflare Worker proxy written in Rust/WASM.
+# tul [English](README.md) | [中文](README_zh.md)
+
+A lightweight Cloudflare Worker proxy written in Rust/WASM.
 
 ## ✨ Features
 
@@ -14,7 +15,7 @@ A lightweight dual-mode Cloudflare Worker proxy written in Rust/WASM.
 ## 📖 Usage Guide
 
 ### Trojan over WebSocket Mode
-Configure Trojan client with WebSocket connection, modify the [v2ra config](./hack/config.json) and run:
+Configure Trojan client with WebSocket connection, modify the [v2ray config](./hack/config.json) and run:
 ```sh
 $ v2ray -c ./hack/config.json
 ```
@@ -41,7 +42,7 @@ click on the button below:
 
 [![Deploy to Cloudflare Workers](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/)
 
-and visit https://{YOUR-WORKERS-SUBDOMAIN}.workers.dev/link to get the config links.
+and visit https://{YOUR-WORKERS-SUBDOMAIN}.workers.dev.
 
 ### Manually
 1. [Create an API token](https://developers.cloudflare.com/fundamentals/api/get-started/create-token/) from the cloudflare dashboard.
@@ -59,7 +60,7 @@ $ make deploy
 ### Fork and Deploy (recommended)
 
 1.  **Fork this repository**
-    [![Fork](https://img.shields.io/badge/-Fork%20this%20repo-blue?style=for-the-badge&logo=github)](https://github.com/yylt/tunl/fork)
+    [![Fork](https://img.shields.io/badge/-Fork%20this%20repo-blue?style=for-the-badge&logo=github)](https://github.com/yylt/tul/fork)
     
     Click the Fork button above to fork this project to your GitHub account.
 

@@ -21,7 +21,13 @@
       "streamSettings": {
         "network": "ws",
         "wsSettings": {
-          "path": "/tj"
+          "path": "/tj" // cf not support early data header.
+        },
+        "security": "tls",
+        "tlsSettings": {
+          "allowInsecure": true,
+          "serverName": "{cloudflare-worker-domain}",
+          "fingerprint": "chrome"
         }
       }
     }
