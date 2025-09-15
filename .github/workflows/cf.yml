@@ -1,4 +1,4 @@
-name: cf workers
+name: Deploy to Cloudflare Workers
 
 on:
   workflow_dispatch:
@@ -10,10 +10,45 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    environment: cf
     steps:
       - uses: actions/checkout@v4
-      - name: deploy
-        uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      - uses: actions/setup-node@v4
+      - name: Install wrangler
+        run: |
+          npm install -g wrangler
+          npx wrangler telemetry disable
+
+      - name: Update environments
+        run: |
+          echo "检查配置情况..."
+          if grep -q "PASSWORD =" wrangler.toml; then
+            echo "⚠️ 检测到 wrangler.toml 中存在硬编码的 PASSWORD, 将从wrangler.toml中移除硬编码"
+            sed -i '/PASSWORD =/d' wrangler.toml
+          fi 
+
+          if grep -q "PREFIX =" wrangler.toml; then
+            echo "⚠️ 检测到wrangler.toml中存在硬编码的 PREFIX, 将从wrangler.toml中移除硬编码"
+            sed -i '/PREFIX =/d' wrangler.toml
+          fi
+          
+      - name: Deploy to Cloudflare Workers
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          npx wrangler deploy 2>&1 | sed -E 's/https:\/\/[a-zA-Z0-9.-]*\.(workers|pages)\.dev/https:\/\/[REDACTED].\1.dev/g'
+
+      - name: Notify deployment status
+        if: always()
+        run: |
+          if [ "${{ job.status }}" == "success" ]; then
+            echo "🎉 成功部署！"
+            echo "===================================================="
+            echo "后续步骤："
+            echo "1. 访问 cloudflare.com, 进入 Workers 页面"
+            echo "2. 设置 worker 环境变量"
+            echo "3. 创建 PASSWORD 和 PREFIX 环境变量并重新部署, 如已存在则忽略此步骤"
+            echo "===================================================="
+          else
+            echo "❌ 部署失败！"
+          fi
+
