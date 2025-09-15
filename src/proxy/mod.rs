@@ -14,6 +14,17 @@ use tokio::{sync::OnceCell};
 static EXPECTED_HASH: OnceCell<Vec<u8>> = OnceCell::const_new();
 static BUFSIZE: OnceCell<usize> = OnceCell::const_new();
 static APIREGEX: OnceCell<Regex> = OnceCell::const_new();
+static PREFIXTJ: OnceCell<String> = OnceCell::const_new();
+
+async fn get_prefix_trojan(cx: &RouteContext<()>) -> String {
+    let pre = cx.env
+        .var("PREFIX")
+        .map_or("/tj".to_string(), |x| x.to_string());
+    if ! pre.starts_with("/") {
+        return format!("/{}", pre);
+    }
+    pre
+}
 
 async fn get_regex() -> Regex {
     regex::Regex::new(r"^/(?P<domain>[^/]+)(?P<path>/[^?]*)?(?P<query>\?.*)?$").unwrap()
@@ -39,8 +50,12 @@ async fn get_bufsize(cx: &RouteContext<()>) -> usize {
 
 pub async fn handler(req: Request, cx: RouteContext<()>) -> Result<Response> {
     console_debug!("Request url: {:?}", req.url().unwrap());
+
+    let pre = PREFIXTJ.get_or_init(|| async {
+        get_prefix_trojan(&cx).await
+    }).await;
     match req.path().as_str() {
-        "/tj" => tj(req, cx).await,
+        path if path.starts_with(pre.as_str()) => tj(req, cx).await,
         _ => {
             let reg = APIREGEX.get_or_init(|| async {
                 get_regex().await
