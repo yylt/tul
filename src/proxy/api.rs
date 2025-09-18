@@ -30,7 +30,7 @@ async fn get_hop_headers() -> HashSet<String> {
     headers.insert("x-forwarded-server".to_string());
 
     // Cloudflare headers
-    headers.insert("cf-connecting-ip".to_string());
+    //headers.insert("cf-connecting-ip".to_string()); // use this otherwise visit cf-cdn blocked.
     headers.insert("cf-ray".to_string());
     headers.insert("cf-ipcountry".to_string());
     headers.insert("cf-request-id".to_string());
@@ -56,6 +56,8 @@ pub async fn handler(mut req: Request, uri: Uri) -> Result<Response> {
         get_hop_headers().await
     }).await;
 
+    let myhost = req.headers().get("host")?.ok_or("Host header not found")?;
+
     let mut request_builder = client.request(method, uri.to_string());
     for (key, value) in req.headers().entries() {
         if hops.contains(key.as_str()) {
@@ -75,7 +77,7 @@ pub async fn handler(mut req: Request, uri: Uri) -> Result<Response> {
         Ok(response) => {
             let status = response.status().as_u16();
             let headers = Headers::new();
-            
+
             for (key, value) in response.headers().iter() {
                 if let Ok(value) = value.to_str() {
                     if hops.contains(key.as_str()) {
@@ -85,7 +87,31 @@ pub async fn handler(mut req: Request, uri: Uri) -> Result<Response> {
                     if key == "content-encoding" {
                         continue;
                     }
-                    headers.append(key.as_str(), value);
+                    match status {
+                        301 | 302 | 303 | 307 | 308 => {
+                             if key == "location" {
+                                if value.starts_with('/') {
+                                    let modified_value = format!("/{}{value}",uri.host().unwrap());
+                                    headers.append(key.as_str(), &modified_value)?;
+                                    continue;
+                                }
+                                if value.starts_with("https://") {
+                                   let modified_value = value.replace("https://", &format!("https://{}/)",myhost.as_str()));
+                                    headers.append(key.as_str(), &modified_value)?;
+                                    continue; 
+                                }
+                            }
+                        }
+                        401 => {
+                            if key == "www-authenticate" {
+                                let modified_value = value.replace("https://", &format!("https://{}/",myhost.as_str()));
+                                headers.append(key.as_str(), &modified_value)?;
+                                continue;
+                            }
+                        }
+                        _ => {}
+                    } 
+                    headers.append(key.as_str(), value)?;
                 }
             }
             
