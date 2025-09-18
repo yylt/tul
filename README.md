@@ -1,4 +1,6 @@
-# tul [English](README.md) | [中文](README_zh.md)
+# tul 
+
+[English](README.md) | [中文](README_zh.md)
 
 A lightweight Cloudflare Worker proxy written in Rust/WASM.
 

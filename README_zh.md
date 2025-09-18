@@ -1,4 +1,6 @@
-# tul [English](README.md) | [中文](README_zh.md)
+# tul 
+
+[English](README.md) | [中文](README_zh.md)
 
 一个轻量级的基于 Cloudflare Worker 代理，使用 Rust/WASM 编写。
 
