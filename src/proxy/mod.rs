@@ -49,8 +49,6 @@ async fn get_bufsize(cx: &RouteContext<()>) -> usize {
 }
 
 pub async fn handler(req: Request, cx: RouteContext<()>) -> Result<Response> {
-    console_debug!("Request url: {:?}", req.url().unwrap());
-
     let pre = PREFIXTJ.get_or_init(|| async {
         get_prefix_trojan(&cx).await
     }).await;
@@ -61,16 +59,25 @@ pub async fn handler(req: Request, cx: RouteContext<()>) -> Result<Response> {
             let reg = APIREGEX.get_or_init(|| async {
                 get_regex().await
             }).await;
-
+            
+            let query = match req.url() {
+                Ok(url) => url.query().unwrap_or("").to_string(),
+                Err(_) => "".to_string(),
+            };
             if let Some(captures) = reg.captures(req.path().as_str()) {
                 let domain = captures.name("domain").map_or("", |x| x.as_str());
                 let path = captures.name("path").map_or("", |x| x.as_str());
-                let query = captures.name("query").map_or("", |x| x.as_str());
 
                 if !domain.contains('.') {
                     return Response::error("Not Found", 404);
                 }
-                if let Ok(url) = format!("https://{}{}{}", domain, path, query).parse::<Uri>() {                   
+                let mut full_url = format!("https://{}{}", domain, path);
+                if !query.is_empty() {
+                    full_url.push('?');
+                    full_url.push_str(&query);
+                }
+                
+                if let Ok(url) = full_url.parse::<Uri>() {                   
                     return api::handler(req,  url).await;
                 }
             } 

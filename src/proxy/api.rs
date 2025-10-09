@@ -52,7 +52,7 @@ pub async fn image_handler(req: Request) -> Result<Response> {
     if let Ok(url) = format!("https://{}{}", domain, req.url()?.path()).parse::<Uri>() {                   
         return handler(req,  url).await;
     }
-    return Response::error("Invalid URL",400);
+    return Response::error( "Not Found",404);
 }
 
 pub async fn handler(mut req: Request, uri: Uri) -> Result<Response> {
