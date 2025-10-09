@@ -1,0 +1,22 @@
+name: Build test
+
+on:
+  push:
+  pull_request:
+    branches: ['main']
+    
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+      - name: Install Rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+      - name: Build test
+        run: |
+          cargo install -q worker-build
+          worker-build --dev

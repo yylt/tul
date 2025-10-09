@@ -1,11 +1,11 @@
 use worker::*;
-use std::collections::HashSet;
+use std::collections::{HashSet, HashMap};
 use reqwest::Client;
 use tokio::{sync::OnceCell};
 use http::Uri;
 
 static HOP_HEADERS: OnceCell<HashSet<String>> = OnceCell::const_new();
-
+static REGISTRY: &str = "registry-1.docker.io";
 
 async fn get_hop_headers() -> HashSet<String> {
     let mut headers = HashSet::new();
@@ -38,6 +38,22 @@ async fn get_hop_headers() -> HashSet<String> {
     headers
 }
 
+pub async fn image_handler(req: Request) -> Result<Response> {
+
+    let domain   = req.query().map_or(REGISTRY, |query: HashMap<String, String>| {
+        match query.get("ns").map(|s| s.as_str()) {
+        Some("gcr.io") => "gcr.io",
+        Some("quay.io") => "quay.io",
+        Some("ghcr.io") => "ghcr.io",
+        Some("registry.k8s.io") => "registry.k8s.io",
+            _ => REGISTRY,
+        }
+    });
+    if let Ok(url) = format!("https://{}{}", domain, req.url()?.path()).parse::<Uri>() {                   
+        return handler(req,  url).await;
+    }
+    return Response::error("Invalid URL",400);
+}
 
 pub async fn handler(mut req: Request, uri: Uri) -> Result<Response> {
     let client = Client::new();

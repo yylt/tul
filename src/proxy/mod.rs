@@ -56,6 +56,7 @@ pub async fn handler(req: Request, cx: RouteContext<()>) -> Result<Response> {
     }).await;
     match req.path().as_str() {
         path if path.starts_with(pre.as_str()) => tj(req, cx).await,
+        path if path.starts_with("/v2") => api::image_handler(req).await,
         _ => {
             let reg = APIREGEX.get_or_init(|| async {
                 get_regex().await

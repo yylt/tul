@@ -1,0 +1,6 @@
+version: 2
+updates:
+  - package-ecosystem: "cargo"
+    directory: "/" # Location of your Cargo.toml and Cargo.lock files
+    schedule:
+      interval: "weekly" # How often Dependabot checks for updates
