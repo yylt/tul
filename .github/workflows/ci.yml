@@ -2,7 +2,9 @@ name: Test
 
 on:
   pull_request:
-    branches: ['main']
+    branches: [ main ]
+  push: 
+    branches: [ main, dev, 'feature/*' ]
 
 jobs:
   build:
@@ -15,7 +17,7 @@ jobs:
         with:
           toolchain: stable
           override: true
-      - name: Build test
+      - name: Build dev
         run: |
           cargo install -q worker-build
           worker-build --dev

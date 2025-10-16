@@ -18,7 +18,7 @@ static PREFIXTJ: OnceCell<String> = OnceCell::const_new();
 
 async fn get_prefix_trojan(cx: &RouteContext<()>) -> String {
     let pre = cx.env
-        .var("PREFIX")
+        .secret("PREFIX")
         .map_or("/tj".to_string(), |x| x.to_string());
     if ! pre.starts_with("/") {
         return format!("/{}", pre);
@@ -32,7 +32,7 @@ async fn get_regex() -> Regex {
 
 async fn get_expected_hash(cx: &RouteContext<()>) -> Vec<u8> {
     let pw = cx.env
-        .var("PASSWORD")
+        .secret("PASSWORD")
         .map_or("password".to_string(), |x| x.to_string());
     Sha224::digest(pw.as_bytes())
         .iter()

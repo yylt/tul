@@ -2,11 +2,9 @@ name: Deploy to Cloudflare Workers
 
 on:
   workflow_dispatch:
-
   push:
-    branches:
-      - main
-
+    tags: [ 'v*' ]
+    
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -17,19 +15,93 @@ jobs:
         run: |
           npm install -g wrangler
           npx wrangler telemetry disable
-
       - name: Update environments
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: |
-          echo "检查配置情况..."
-          if grep -q "PASSWORD =" wrangler.toml; then
-            echo "⚠️ 检测到 wrangler.toml 中存在硬编码的 PASSWORD, 将从wrangler.toml中移除硬编码"
-            sed -i '/PASSWORD =/d' wrangler.toml
-          fi 
+          # 定义需要检查的密钥列表
+          SECRET_NAMES=("PASSWORD" "PREFIX")
+          
+          # 检查Worker中是否存在指定的secret变量
+          set +e
+          SECRET_LIST_OUTPUT=$(npx wrangler secret list 2>&1)
+          set -e
 
-          if grep -q "PREFIX =" wrangler.toml; then
-            echo "⚠️ 检测到wrangler.toml中存在硬编码的 PREFIX, 将从wrangler.toml中移除硬编码"
-            sed -i '/PREFIX =/d' wrangler.toml
-          fi
+          # 遍历检查每个密钥
+          for SECRET_NAME in "${SECRET_NAMES[@]}"; do
+            if echo "$SECRET_LIST_OUTPUT" | grep -q "$SECRET_NAME"; then
+              echo "✅ Worker中已存在${SECRET_NAME}(作为secret变量)"
+              declare "WORKER_HAS_${SECRET_NAME}"=true
+            else
+              echo "⚠️ Worker中未检测到${SECRET_NAME}(作为secret变量)"
+              declare "WORKER_HAS_${SECRET_NAME}"=false
+            fi
+          done
+
+          # 处理每个密钥
+          for SECRET_NAME in "${SECRET_NAMES[@]}"; do
+            # 动态获取变量名
+            HAS_SECRET_VAR="WORKER_HAS_${SECRET_NAME}"
+            WORKER_HAS_SECRET="${!HAS_SECRET_VAR}"
+            
+            echo "--- 处理 ${SECRET_NAME} ---"
+            
+            # 如果Worker中已有密钥，则跳过创建
+            if [[ "$WORKER_HAS_SECRET" == "true" ]]; then
+              echo "✅ Worker中已存在${SECRET_NAME}(作为secret变量)，跳过创建步骤"
+            else
+              
+              if [[ "$SECRET_NAME" == "PASSWORD" ]]; then
+                if [[ -n "${{ secrets.PASSWORD }}" ]]; then
+                  echo "使用GitHub中配置的PASSWORD值"
+                  SECRET_VALUE="${{ secrets.PASSWORD }}"
+                else
+                  echo "❌ 未找到GitHub中配置的${SECRET_NAME}值"
+                  exit 1 
+                fi
+              elif [[ "$SECRET_NAME" == "PREFIX" ]]; then
+                if [[ -n "${{ secrets.PREFIX }}" ]]; then
+                  echo "使用GitHub中配置的PREFIX值"
+                  SECRET_VALUE="${{ secrets.PREFIX }}"
+                else
+                  echo "❌ 未找到GitHub中配置的${SECRET_NAME}值"
+                  exit 1 
+                fi
+              fi
+              
+              set +e
+              echo "正在设置${SECRET_NAME}..."
+              SECRET_PUT_OUTPUT=$(echo "$SECRET_VALUE" | npx wrangler secret put "$SECRET_NAME" 2>&1)
+              SECRET_RESULT=$?
+              set -e
+
+              echo "Secret put 输出:"
+              echo "$SECRET_PUT_OUTPUT" | grep -v "Please update to the latest version"
+
+              if [ $SECRET_RESULT -ne 0 ]; then
+                # 如果错误是由于密钥已存在导致的，视为成功
+                if echo "$SECRET_PUT_OUTPUT" | grep -q -E "(already in use|already exists|conflict)"; then
+                  echo "⚠️ ${SECRET_NAME}已存在于Worker中但未被列表命令检测到，继续执行"
+                else
+                  # 最后再检查一次是否因为密钥已存在但未被正确检测
+                  set +e
+                  FINAL_CHECK=$(npx wrangler secret list 2>&1)
+                  set -e
+
+                  if echo "$FINAL_CHECK" | grep -q "$SECRET_NAME"; then
+                    echo "虽然设置${SECRET_NAME}失败，但密钥似乎已存在于Worker中，继续执行"
+                  else
+                    echo "❌ 设置${SECRET_NAME}失败，且密钥确实不存在，退出部署"
+                    echo "详细错误信息: $SECRET_PUT_OUTPUT"
+                    exit 1
+                  fi
+                fi
+              else
+                echo "✅ ${SECRET_NAME} 已成功创建(作为secret变量)"
+              fi
+            fi
+            echo ""  # 空行分隔不同密钥的处理日志
+          done
           
       - name: Deploy to Cloudflare Workers
         env:
@@ -42,12 +114,6 @@ jobs:
         run: |
           if [ "${{ job.status }}" == "success" ]; then
             echo "🎉 成功部署！"
-            echo "===================================================="
-            echo "后续步骤："
-            echo "1. 访问 cloudflare.com, 进入 Workers 页面"
-            echo "2. 设置 worker 环境变量"
-            echo "3. 创建 PASSWORD 和 PREFIX 环境变量并重新部署, 如已存在则忽略此步骤"
-            echo "===================================================="
           else
             echo "❌ 部署失败！"
           fi
