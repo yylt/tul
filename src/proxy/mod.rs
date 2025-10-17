@@ -10,6 +10,10 @@ use base64::{engine::general_purpose, Engine as _};
 use worker::*;
 use sha2::{Sha224, Digest};
 use tokio::{sync::OnceCell};
+use std::io::{
+    Error,
+    ErrorKind,
+};
 
 static EXPECTED_HASH: OnceCell<Vec<u8>> = OnceCell::const_new();
 static BUFSIZE: OnceCell<usize> = OnceCell::const_new();
@@ -87,7 +91,7 @@ pub async fn handler(req: Request, cx: RouteContext<()>) -> Result<Response> {
 }
 
 pub async fn tj(req: Request, cx: RouteContext<()>) -> Result<Response> {
-
+    
     let expected_hash = EXPECTED_HASH.get_or_init(|| async {
         get_expected_hash(&cx).await
     }).await;
@@ -95,35 +99,27 @@ pub async fn tj(req: Request, cx: RouteContext<()>) -> Result<Response> {
         get_bufsize(&cx).await
     }).await;
 
-
     let WebSocketPair { server, client } = WebSocketPair::new()?;
-
-    let mut response = Response::from_websocket(client)?;
-    let mut early_data = None;
-
-    let ws_proto = req.headers().get("sec-websocket-protocol").unwrap_or(None);
-    if let Some(proto) = ws_proto {
-        response.headers_mut().set("sec-websocket-protocol", proto.as_str())?;
-        
-        let decoded_bytes = general_purpose::STANDARD_NO_PAD.decode(proto.as_bytes())
-            .map_err(|e| {
-                std::io::Error::new(std::io::ErrorKind::InvalidData, format!("Invalid base64 encoding: {e}"))
-            })?;
-        
-        early_data = Some(decoded_bytes);
-    }
+    let response = Response::from_websocket(client)?;
+    
+    let early_data = req.headers()
+        .get("sec-websocket-protocol")?
+        .and_then(|value| {
+            general_purpose::STANDARD_NO_PAD.decode(value.as_bytes())
+                .ok() 
+                .inspect(|decoded| {
+                    Some(decoded);
+                })
+        });
 
     server.accept()?;
-
-    let early_data_for_async = early_data;
-    
     wasm_bindgen_futures::spawn_local(async move {
-        let events = server.events().expect("Failed to get server events");
+        let events = server.events().expect("Failed to get event stream");
         let mut wsstream = websocket::WsStream::new(
             &server,
             events,
             buf_size,
-            early_data_for_async,
+            early_data,
             );
 
         let result = match tj::parse(expected_hash,&mut wsstream).await {
@@ -140,10 +136,7 @@ pub async fn tj(req: Request, cx: RouteContext<()>) -> Result<Response> {
                     }
                     Err(e) => {
                         console_error!("connect failed: {}", e);
-                        Err(std::io::Error::new(
-                            std::io::ErrorKind::InvalidData,
-                            "connect failed:"),
-                        )
+                        Err(Error::new(ErrorKind::Other, e))
                     }
                 }                       
             },
@@ -152,10 +145,11 @@ pub async fn tj(req: Request, cx: RouteContext<()>) -> Result<Response> {
                 Err(e)
             }
         };
-        if let Err(_e) = result{
+        if let Err(_e) = result {
+             server.close(Some(1011u16), Some("Internal error or connection failure")).ok();
+        } else {
              server.close(Some(1000u16), Some("Normal closure")).ok();
         }
-       
     });
     Ok(response)
 }

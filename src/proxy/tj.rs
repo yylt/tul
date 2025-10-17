@@ -23,7 +23,7 @@ pub async fn parse<R: AsyncRead + Unpin>(pw_hash: &Vec<u8>, stream: &mut R) -> s
 
     // Extract command
     match stream.read_u8().await? {
-        1 => {},
+        1|3 => {},
         cmd => {
             return Err(std::io::Error::new(
                 std::io::ErrorKind::InvalidData,

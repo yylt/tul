@@ -25,9 +25,11 @@ base64 = "0.22"
 
 [profile.release]
 opt-level = "s"
+debug = false
 lto = true
 strip = true
-codegen-units = 1
+debug-assertions = false
+codegen-units = 8
 
 
 [package.metadata.wasm-pack.profile.release]

@@ -42,10 +42,10 @@ pub async fn image_handler(req: Request) -> Result<Response> {
 
     let domain   = req.query().map_or(REGISTRY, |query: HashMap<String, String>| {
         match query.get("ns").map(|s| s.as_str()) {
-        Some("gcr.io") => "gcr.io",
-        Some("quay.io") => "quay.io",
-        Some("ghcr.io") => "ghcr.io",
-        Some("registry.k8s.io") => "registry.k8s.io",
+            Some("gcr.io") => "gcr.io",
+            Some("quay.io") => "quay.io",
+            Some("ghcr.io") => "ghcr.io",
+            Some("registry.k8s.io") => "registry.k8s.io",
             _ => REGISTRY,
         }
     });
