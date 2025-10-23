@@ -6,11 +6,11 @@
 
 ## ✨ 特性
 
-🔒 基于 WebSocket 的 Trojan 协议 - 通过 WebSocket 传输的安全代理协议，如访问 cf cdn 节点，建议自定义头部 `cf-connecting-ip`
+🔒 基于 WebSocket 的 Trojan 协议 - 通过 WebSocket 传输的安全代理协议。建议通过代理访问 cf 节点时，添加头部 `cf-connecting-ip`，否则无法正常工作
 
 🌐 通用 API 代理 - 通过单一端点路由任何 API 请求
 
-🐳 灵活镜像仓库支持 - 默认从 Docker Hub 拉取，同时支持任意容器镜像仓库
+🐳 灵活镜像仓库支持 - 默认从 Docker Hub 拉取。同时支持任意容器镜像仓库，使用 query params `ns` 区分
 
 ⚡ WASM 驱动 - 高性能 Rust 实现
 
@@ -33,6 +33,17 @@ curl https://api.openai.com/v1/chat/completions
 # 通过代理
 curl https://your-worker.your-subdomain.workers.dev/api.openai.com/v1/chat/completions
 ```
+
+### docker 镜像代理模式
+代理 docker.io 拉取镜像请求
+```bash
+# 原始请求
+docker pull docker.io/library/ubuntu:latest
+
+# 通过代理
+docker pull your-worker.your-subdomain.workers.dev/library/ubuntu:latest
+```
+
 
 ## 🚀 快速开始
 
@@ -76,6 +87,7 @@ $ make deploy
     - 在 `Name` 输入框中输入 `CLOUDFLARE_API_TOKEN`
     - 将您的 Cloudflare API 令牌粘贴到 `Value` 输入框中
     - 点击 `Add secret` 按钮保存
+    - 按照上述步骤添加变量 `PASSWORD` 和 `PREFIX`, 在 `trojan` 代理时使用
 
 3.  **触发部署**
     - 转到您 fork 仓库的 `Actions` 标签

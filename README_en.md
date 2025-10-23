@@ -6,7 +6,7 @@ A lightweight Cloudflare Worker proxy written in Rust/WASM.
 
 ## ✨ Features
 
-🔒 WebSocket-based Trojan Protocol - Secure proxy protocol over WebSocket, If accessing the CF CDN node, recommended to add header `cf-connecting-ip`
+🔒 WebSocket-based Trojan Protocol - Secure proxy protocol over WebSocket. If accessing the CF node, recommended to add header `cf-connecting-ip`
 
 🌐 Universal API Proxy - Route any API through a single endpoint
 
@@ -32,6 +32,16 @@ curl https://api.openai.com/v1/chat/completions
 
 # Through proxy
 curl https://your-worker.your-subdomain.workers.dev/api.openai.com/v1/chat/completions
+```
+
+### Docker Image Proxy Mode
+Proxy Docker Pull Image requests:
+```bash
+# Original request
+docker pull docker.io/library/ubuntu:latest
+
+# Through proxy
+docker pull your-worker.your-subdomain.workers.dev/library/ubuntu:latest
 ```
 
 ## 🚀 Quick Start
@@ -76,6 +86,7 @@ $ make deploy
     - Enter `CLOUDFLARE_API_TOKEN` in the `Name` input field
     - Paste your Cloudflare API Token into the `Value` input field
     - Click the `Add secret` button to save it
+    - Add the variables `PASSWORD` and `PREFIX` according to the steps above, which used in the `trojan` proxy.
 
 3.  **Trigger Deployment**
     - Go to the `Actions` tab of your forked repository
