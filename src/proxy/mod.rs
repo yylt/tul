@@ -5,7 +5,6 @@ pub mod websocket;
 pub mod api;
 
 use regex::Regex;
-use http::Uri;
 use base64::{engine::general_purpose, Engine as _};
 use worker::*;
 use sha2::{Sha224, Digest};
@@ -81,7 +80,7 @@ pub async fn handler(req: Request, cx: RouteContext<()>) -> Result<Response> {
                     full_url.push_str(&query);
                 }
                 
-                if let Ok(url) = full_url.parse::<Uri>() {                   
+                if let Ok(url) = Url::parse(&full_url) {                   
                     return api::handler(req,  url).await;
                 }
             } 
