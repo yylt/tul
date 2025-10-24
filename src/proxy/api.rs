@@ -1,8 +1,7 @@
 use worker::*;
 use std::collections::{HashSet, HashMap};
-use reqwest::Client;
 use tokio::{sync::OnceCell};
-use http::Uri;
+
 
 static HOP_HEADERS: OnceCell<HashSet<String>> = OnceCell::const_new();
 static REGISTRY: &str = "registry-1.docker.io";
@@ -35,11 +34,14 @@ async fn get_hop_headers() -> HashSet<String> {
     headers.insert("cf-ipcountry".to_string());
     headers.insert("cf-request-id".to_string());
 
+    // content had decoded
+    headers.insert("content-encoding".to_string());
+
     headers
 }
 
 pub async fn image_handler(req: Request) -> Result<Response> {
-
+    let req_url = req.url()?;
     let domain   = req.query().map_or(REGISTRY, |query: HashMap<String, String>| {
         match query.get("ns").map(|s| s.as_str()) {
             Some("gcr.io") => "gcr.io",
@@ -49,100 +51,89 @@ pub async fn image_handler(req: Request) -> Result<Response> {
             _ => REGISTRY,
         }
     });
-    if let Ok(url) = format!("https://{}{}", domain, req.url()?.path()).parse::<Uri>() {                   
+    let full_url = format!("https://{}{}", domain, req_url.path());
+    if let Ok(url) = Url::parse(&full_url) {                   
         return handler(req,  url).await;
     }
     return Response::error( "Not Found",404);
 }
 
-pub async fn handler(mut req: Request, uri: Uri) -> Result<Response> {
-    let client = Client::new();
-
-    let method = match req.method() {
-        worker::Method::Get => reqwest::Method::GET,
-        worker::Method::Post => reqwest::Method::POST,
-        worker::Method::Put => reqwest::Method::PUT,
-        worker::Method::Delete => reqwest::Method::DELETE,
-        worker::Method::Head => reqwest::Method::HEAD,
-        worker::Method::Options => reqwest::Method::OPTIONS,
-        worker::Method::Patch => reqwest::Method::PATCH,
-        _ => return Response::error("Not supported method", 404),
-    };
+pub async fn handler(mut req: Request, uri: Url) -> Result<Response> {
     let hops = HOP_HEADERS.get_or_init(|| async {
         get_hop_headers().await
     }).await;
-
-    let myhost = req.headers().get("host")?.ok_or("Host header not found")?;
-
-    let mut request_builder = client.request(method, uri.to_string());
+    let my_host = req.headers()
+        .get("host")?
+        .ok_or("Host header not found")?;
+    let dst_host = uri.host_str().ok_or("Host not found")?;
+    // build request
+    let req_headers = Headers::new();
     for (key, value) in req.headers().entries() {
-        if hops.contains(key.as_str()) {
+        if hops.contains(&key) {
             continue;
         }
-        request_builder = request_builder.header(&key, value);
+        req_headers.set(&key, &value)?;
     }
-    request_builder = request_builder.header("Host", uri.host().unwrap());
-    
+    req_headers.set("host", dst_host)?;
+
+    let mut req_init = RequestInit {
+        method: req.method(),
+        headers: req_headers,
+        body: None,
+        cf: CfProperties::default(),
+        redirect: RequestRedirect::Manual,
+    };
+    // body if exist
     if let Ok(body) = req.bytes().await {
         if !body.is_empty() {
-            request_builder = request_builder.body(body);
+            req_init.body = Some(wasm_bindgen::JsValue::from(body));
         }
     }
-    console_debug!("Request: {:?}, header:{:?}",uri.to_string(), req.headers());
-    match request_builder.send().await {
-        Ok(response) => {
-            let status = response.status().as_u16();
-            let headers = Headers::new();
+    let new_req = Request::new_with_init(&uri.to_string(), &req_init)?;
 
-            for (key, value) in response.headers().iter() {
-                if let Ok(value) = value.to_str() {
-                    if hops.contains(key.as_str()) {
-                        continue;
-                    }
-                    // as client, not support content-encoding
-                    if key == "content-encoding" {
-                        continue;
-                    }
-                    match status {
-                        301 | 302 | 303 | 307 | 308 => {
-                             if key == "location" {
-                                if value.starts_with('/') {
-                                    let modified_value = format!("/{}{value}",uri.host().unwrap());
-                                    headers.append(key.as_str(), &modified_value)?;
-                                    continue;
-                                }
-                                if value.starts_with("https://") {
-                                   let modified_value = value.replace("https://", &format!("https://{}/)",myhost.as_str()));
-                                    headers.append(key.as_str(), &modified_value)?;
-                                    continue; 
-                                }
-                            }
+    // send request
+    let mut response = Fetch::Request(new_req).send().await?;
+
+    // update response
+    let resp_header = Headers::new();
+    let status = response.status_code();
+
+    for (key, value) in response.headers().entries() {
+        if hops.contains(&key) {
+            continue;
+        }
+        let new_value = match (status, key.as_str()){
+            (301..= 308, "location") => {
+                if value.starts_with('/') {
+                    format!("/{}{}", uri.host().unwrap(), value)
+                } else if value.starts_with("https://") {
+                    if let Ok(url) = Url::parse(&value) {
+                        if url.host_str().map_or(false, |host| host.contains("cloudflare")) {
+                            value
+                        } else {
+                            value.replace("https://", &format!("http://{}/", my_host))
                         }
-                        401 => {
-                            if key == "www-authenticate" {
-                                let modified_value = value.replace("https://", &format!("https://{}/",myhost.as_str()));
-                                headers.append(key.as_str(), &modified_value)?;
-                                continue;
-                            }
-                        }
-                        _ => {}
-                    } 
-                    headers.append(key.as_str(), value)?;
-                }
+                    } else {
+                        value.replace("https://", &format!("https://{}/", my_host))
+                    }
+                } else {
+                    value
+                }         
             }
-            
-            let body = response.bytes().await.map_err(|e| {
-                console_error!("Failed to read response body: {:?}", e);
-                Error::RustError(format!("Failed to read response body: {:?}", e))
-            })?;
-            
-            return Ok(Response::builder()
-                .with_status(status)
-                .with_headers(headers)
-                .body(ResponseBody::Body(body.to_vec())));
-        }
-        Err(e) => {
-            return Response::error(e.to_string(), 500);
-        }
-    };
+            (401, "www-authenticate") => {
+                value.replace("https://", &format!("https://{}/", my_host))
+            }
+            _ => value,
+        };
+        resp_header.set(&key, &new_value)?;
+    }
+
+    let body = response.bytes().await.map_err(|e| {
+        Error::RustError(format!("Failed to read response body: {:?}", e))
+    })?;
+
+    return Ok(Response::builder()
+        .with_status(status)
+        .with_headers(resp_header)
+        .body(ResponseBody::Body(body.to_vec())));    
 } 
