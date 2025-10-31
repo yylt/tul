@@ -11,8 +11,7 @@ async fn fetch(
     env: Env,
     _ctx: Context,
 ) -> Result<Response> {
-    console_error_panic_hook::set_once();
-    
+   
     Router::new()
         .on_async("/*path", handler)
         .run(req, env)

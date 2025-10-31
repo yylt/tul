@@ -2,4 +2,3 @@ target
 node_modules
 .wrangler
 build
-Cargo.lock

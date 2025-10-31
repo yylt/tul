@@ -7,12 +7,11 @@ edition = "2021"
 crate-type = ["cdylib"]
 
 [dependencies]
-worker = { version = "0.6.6" }
-worker-macros = { version = "0.6.6" }
-console_error_panic_hook = { version = "0.1.7" }
+worker = { version = "0.6.7", features = ["http"] }
+worker-macros = { version = "0.6.7" }
 futures = "0.3.31"
-futures-util = "0.3.31"
-wasm-bindgen = "0.2.104"
+wasm-bindgen-futures = "0.4.55"
+
 tokio = { version = "1.48.0", features = ["io-util", "sync"], default-features = false }
 regex = "1.12.2"
 getrandom = { version = "0.3", features = ["wasm_js"] }
@@ -26,7 +25,7 @@ debug = false
 lto = true
 strip = true
 debug-assertions = false
-codegen-units = 8
+codegen-units = 1
 
 
 [package.metadata.wasm-pack.profile.release]

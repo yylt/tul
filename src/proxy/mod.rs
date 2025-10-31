@@ -100,7 +100,6 @@ pub async fn tj(req: Request, cx: RouteContext<()>) -> Result<Response> {
 
     let WebSocketPair { server, client } = WebSocketPair::new()?;
     let response = Response::from_websocket(client)?;
-    
     let early_data = req.headers()
         .get("sec-websocket-protocol")?
         .and_then(|value| {
