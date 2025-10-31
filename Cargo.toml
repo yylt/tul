@@ -7,8 +7,8 @@ edition = "2021"
 crate-type = ["cdylib"]
 
 [dependencies]
-worker = { version = "0.6.6" }
-worker-macros = { version = "0.6.6" }
+worker = { version = "0.6.7" }
+worker-macros = { version = "0.6.7" }
 console_error_panic_hook = { version = "0.1.7" }
 futures = "0.3.31"
 futures-util = "0.3.31"
