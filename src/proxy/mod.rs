@@ -18,6 +18,8 @@ static EXPECTED_HASH: OnceCell<Vec<u8>> = OnceCell::const_new();
 static BUFSIZE: OnceCell<usize> = OnceCell::const_new();
 static APIREGEX: OnceCell<Regex> = OnceCell::const_new();
 static PREFIXTJ: OnceCell<String> = OnceCell::const_new();
+static DOH_HOST: OnceCell<String> = OnceCell::const_new();
+
 
 async fn get_prefix_trojan(cx: &RouteContext<()>) -> String {
     let pre = cx.env
@@ -30,7 +32,7 @@ async fn get_prefix_trojan(cx: &RouteContext<()>) -> String {
 }
 
 async fn get_regex() -> Regex {
-    regex::Regex::new(r"^/(?P<domain>[^/]+)(?P<path>/[^?]*)?(?P<query>\?.*)?$").unwrap()
+    regex::Regex::new(r"^/(?P<domain>[^/]+)(?P<path>/[^?]*)?$").unwrap()
 }
 
 async fn get_expected_hash(cx: &RouteContext<()>) -> Vec<u8> {
@@ -43,7 +45,12 @@ async fn get_expected_hash(cx: &RouteContext<()>) -> Vec<u8> {
         .collect::<String>()
         .as_bytes()
         .to_vec()
+}
 
+async fn get_doh_host(cx: &RouteContext<()>) -> String {
+    cx.env
+        .var("DOH_HOST")
+        .map_or("dns.google".to_string(), |x| x.to_string())
 }
 
 async fn get_bufsize(cx: &RouteContext<()>) -> usize {
@@ -56,6 +63,13 @@ pub async fn handler(req: Request, cx: RouteContext<()>) -> Result<Response> {
         get_prefix_trojan(&cx).await
     }).await;
     match req.path().as_str() {
+        "/dns-query" | "/resolve"=> {
+            let host = DOH_HOST.get_or_init(|| async {
+                get_doh_host(&cx).await
+            }).await;
+            
+            api::dns_handler(req, host).await
+        }
         path if path.starts_with(pre.as_str()) => tj(req, cx).await,
         path if path.starts_with("/v2") => api::image_handler(req).await,
         _ => {
