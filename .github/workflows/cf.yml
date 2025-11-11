@@ -60,16 +60,16 @@ jobs:
                   echo "使用GitHub中配置的PASSWORD值"
                   SECRET_VALUE="${{ secrets.PASSWORD }}"
                 else
-                  echo "❌ 未找到GitHub中配置的${SECRET_NAME}值"
-                  exit 1 
+                  echo "!!! 未找到GitHub中配置的${SECRET_NAME}值，将使用默认值"
+                  break
                 fi
               elif [[ "$SECRET_NAME" == "PREFIX" ]]; then
                 if [[ -n "${{ secrets.PREFIX }}" ]]; then
                   echo "使用GitHub中配置的PREFIX值"
                   SECRET_VALUE="${{ secrets.PREFIX }}"
                 else
-                  echo "❌ 未找到GitHub中配置的${SECRET_NAME}值"
-                  exit 1 
+                  echo "!!! 未找到GitHub中配置的${SECRET_NAME}值，将使用默认值"
+                  break
                 fi
               fi
               
