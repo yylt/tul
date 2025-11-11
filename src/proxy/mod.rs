@@ -72,7 +72,7 @@ async fn get_bufsize(cx: &RouteContext<()>) -> usize {
 pub async fn get_doh_host(cx: &RouteContext<()>) -> String {
     cx.env
         .var("DOH_HOST")
-        .map_or("dns.google".to_string(), |x| x.to_string())
+        .map_or("1.1.1.1".to_string(), |x| x.to_string())
 }
 
 pub async fn handler(req: Request, cx: RouteContext<()>) -> Result<Response> {

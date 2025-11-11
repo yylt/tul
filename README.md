@@ -6,11 +6,13 @@
 
 ## ✨ 特性
 
-🔒 基于 WebSocket 的 Trojan 协议 - 通过 WebSocket 传输的安全代理协议。建议通过代理访问 cf 节点时，添加头部 `cf-connecting-ip`，否则无法正常工作
+🔒 基于 WebSocket 的 Trojan 协议 - 通过 WebSocket 传输的安全代理协议
 
 🌐 通用 API 代理 - 通过单一端点路由任何 API 请求
 
-🐳 灵活镜像仓库支持 - 默认从 Docker Hub 拉取。同时支持任意容器镜像仓库，使用 query params `ns` 区分
+🐳 灵活镜像仓库支持 - 默认从 Docker Hub 拉取，并支持任意容器镜像仓库
+
+🔍 安全 DNS 解析 - 支持 DoH（DNS over HTTPS）协议，默认使用 1.1.1.1 进行安全域名解析
 
 ⚡ WASM 驱动 - 高性能 Rust 实现
 
@@ -23,6 +25,17 @@
 ```sh
 $ v2ray -c ./hack/config.json
 ```
+
+- <details>
+  <summary><strong>🚨 访问故障排除指南（必读）</strong></summary>
+
+  💡 **解决方案**：通常因为目标为 CloudFlare 节点  建议配置 DoH 并直连 
+
+  ⚠️ **特别注意**：国内 DoH 被污染，请谨慎选择 DoH 服务商  
+
+  📖 **技术原理**：浏览器使用 ECH 建立 TLS 连接前，会用 DoH 查询 HTTPS 记录
+
+  </details>
 
 ### 通用 API 代理模式
 代理任何 API 请求：
@@ -42,6 +55,17 @@ docker pull docker.io/library/ubuntu:latest
 
 # 通过代理
 docker pull your-worker.your-subdomain.workers.dev/library/ubuntu:latest
+```
+
+### DoH(DNS over HTTPS) 模式
+代理 DNS 查询请求，这对使用 cloudflare 代理网站很重要，如 linux.do, v2ex.com 等
+```bash
+
+# 测试请求
+curl -s "https://1.1.1.1/dns-query?name=v2ex.com&type=A" -H "accept: application/dns-json" 
+
+# 通过代理测试请求
+curl -s "https://your-worker.your-subdomain.workers.dev/dns-query?name=v2ex.com&type=A" -H "accept: application/dns-json" 
 ```
 
 
