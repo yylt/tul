@@ -4,8 +4,7 @@ use tokio::io::{AsyncRead, AsyncReadExt};
 use std::net::{Ipv4Addr, Ipv6Addr};
 use std::vec::Vec;
 
-
-pub async fn parse<R: AsyncRead + Unpin>(pw_hash: &Vec<u8>, stream: &mut R) -> std::io::Result<(String, u16)> {
+pub async fn parse<R: AsyncRead + Unpin>(pw_hash: &Vec<u8>, stream: &mut R) -> std::io::Result<(super::Address, u16)> {
 
     let mut password_hash = [0u8; 56];
     stream.read_exact(&mut password_hash).await?;
@@ -37,8 +36,8 @@ pub async fn parse<R: AsyncRead + Unpin>(pw_hash: &Vec<u8>, stream: &mut R) -> s
 
     // Get address size and address object
     let host = match atype {
-        1 => Ipv4Addr::from(stream.read_u32().await?).to_string(),
-        4 => Ipv6Addr::from(stream.read_u128().await?).to_string(),
+        1 => super::Address::Ipv4(Ipv4Addr::from(stream.read_u32().await?)),
+        4 => super::Address::Ipv6(Ipv6Addr::from(stream.read_u128().await?)),
         3 => {
             // Read domain name size
             let size = stream.read_u8().await? as usize;
@@ -46,8 +45,8 @@ pub async fn parse<R: AsyncRead + Unpin>(pw_hash: &Vec<u8>, stream: &mut R) -> s
             // Read domain name context
             let mut domain_buf = vec![0u8; size];
             stream.read_exact(&mut domain_buf).await?;
-            String::from_utf8(domain_buf)
-                .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?
+            super::Address::Domain(String::from_utf8(domain_buf)
+                .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?)
         }
         _ => return Err(std::io::Error::new(
                 std::io::ErrorKind::InvalidData,

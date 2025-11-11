@@ -2,6 +2,11 @@
 name = "tul"
 version = "0.1.0"
 edition = "2021"
+description = "A rust wasm serverlesss worker"
+authors = ["yylt <yang8518296@163.com>"]
+license = "MIT"
+repository = "https://github.com/yylt/tul"
+homepage = "https://github.com/yylt/tul"
 
 [lib]
 crate-type = ["cdylib"]
@@ -17,7 +22,10 @@ regex = "1.12.2"
 getrandom = { version = "0.3", features = ["wasm_js"] }
 sha2 = "0.10.9"
 pin-project-lite = "0.2.16"
-base64 = "0.22.1"
+
+prefix-trie = "0.8.1"
+ipnet = "2.11.0"
+serde = { version = "1.0.195", features = ["derive"] }
 
 [profile.release]
 opt-level = "z"

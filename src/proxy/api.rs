@@ -1,10 +1,11 @@
+
 use worker::*;
 use std::collections::{HashSet, HashMap};
 use tokio::{sync::OnceCell};
 
-
 static HOP_HEADERS: OnceCell<HashSet<String>> = OnceCell::const_new();
 static REGISTRY: &str = "registry-1.docker.io";
+
 
 async fn get_hop_headers() -> HashSet<String> {
     let mut headers = HashSet::new();
@@ -137,3 +138,41 @@ pub async fn handler(mut req: Request, uri: Url) -> Result<Response> {
         .with_headers(resp_header)
         .body(ResponseBody::Body(body.to_vec())));    
 } 
+
+
+pub async fn resolve_handler(mut req: Request, host: &String, query: Option<String>) -> Result<Response> {
+    let hops = HOP_HEADERS.get_or_init(|| async {
+        get_hop_headers().await
+    }).await;
+    let req_headers = Headers::new();
+    for (key, value) in req.headers().entries() {
+        if hops.contains(&key) {
+            continue;
+        }
+        req_headers.set(&key, &value)?;
+    }
+    req_headers.set("host", host.as_str())?;
+
+    let mut req_init = RequestInit {
+        method: req.method(),
+        headers: req_headers,
+        body: None,
+        cf: CfProperties::default(),
+        redirect: RequestRedirect::Follow,
+    };
+    // body if exist
+    if let Ok(body) = req.bytes().await {
+        if !body.is_empty() {
+            req_init.body = Some(wasm_bindgen::JsValue::from(body));
+        }
+    }
+    let mut uri = format!("https://{}{}", host, req.path());
+    if let Some(v) = query {
+        uri.push('?');
+        uri.push_str(&v);
+    }
+
+    let new_req = Request::new_with_init(&uri, &req_init)?;
+    console_debug!("DNS Request: {:?}", new_req);
+    return Fetch::Request(new_req).send().await;
+}
