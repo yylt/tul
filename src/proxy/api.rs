@@ -1,9 +1,11 @@
+
 use worker::*;
 use std::collections::{HashSet, HashMap};
 use tokio::{sync::OnceCell};
 
 static HOP_HEADERS: OnceCell<HashSet<String>> = OnceCell::const_new();
 static REGISTRY: &str = "registry-1.docker.io";
+
 
 async fn get_hop_headers() -> HashSet<String> {
     let mut headers = HashSet::new();
@@ -138,14 +140,10 @@ pub async fn handler(mut req: Request, uri: Url) -> Result<Response> {
 } 
 
 
-pub async fn dns_handler(mut req: Request, host: &String) -> Result<Response> {
+pub async fn resolve_handler(mut req: Request, host: &String, query: Option<String>) -> Result<Response> {
     let hops = HOP_HEADERS.get_or_init(|| async {
         get_hop_headers().await
     }).await;
-    let query = match req.url() {
-        Ok(url) => url.query().unwrap_or("").to_string(),
-        Err(_) => "".to_string(),
-    };
     let req_headers = Headers::new();
     for (key, value) in req.headers().entries() {
         if hops.contains(&key) {
@@ -169,10 +167,12 @@ pub async fn dns_handler(mut req: Request, host: &String) -> Result<Response> {
         }
     }
     let mut uri = format!("https://{}{}", host, req.path());
-    if !query.is_empty() {
+    if let Some(v) = query {
         uri.push('?');
-        uri.push_str(&query);
+        uri.push_str(&v);
     }
+
     let new_req = Request::new_with_init(&uri, &req_init)?;
+    console_debug!("DNS Request: {:?}", new_req);
     return Fetch::Request(new_req).send().await;
 }

@@ -3,9 +3,10 @@
 pub mod tj;
 pub mod websocket;
 pub mod api;
+pub mod dns;
 
 use regex::Regex;
-use base64::{engine::general_purpose, Engine as _};
+use std::net::{Ipv4Addr, Ipv6Addr};
 use worker::*;
 use sha2::{Sha224, Digest};
 use tokio::{sync::OnceCell};
@@ -20,6 +21,22 @@ static APIREGEX: OnceCell<Regex> = OnceCell::const_new();
 static PREFIXTJ: OnceCell<String> = OnceCell::const_new();
 static DOH_HOST: OnceCell<String> = OnceCell::const_new();
 
+#[derive(Debug, Clone)]
+pub enum Address {
+    Ipv4(Ipv4Addr),
+    Ipv6(Ipv6Addr),
+    Domain(String),
+}
+
+impl Into<String> for Address {
+    fn into(self) -> String {
+        match self {
+            Address::Ipv4(ip) => ip.to_string(),
+            Address::Ipv6(ip) => ip.to_string(),
+            Address::Domain(domain) => domain,
+        }
+    }
+}
 
 async fn get_prefix_trojan(cx: &RouteContext<()>) -> String {
     let pre = cx.env
@@ -47,40 +64,39 @@ async fn get_expected_hash(cx: &RouteContext<()>) -> Vec<u8> {
         .to_vec()
 }
 
-async fn get_doh_host(cx: &RouteContext<()>) -> String {
-    cx.env
-        .var("DOH_HOST")
-        .map_or("dns.google".to_string(), |x| x.to_string())
-}
-
 async fn get_bufsize(cx: &RouteContext<()>) -> usize {
     cx.env.var("BUFSIZE")
     .map_or(2048, |x| x.to_string().parse::<usize>().unwrap_or(2048))
 }
 
+pub async fn get_doh_host(cx: &RouteContext<()>) -> String {
+    cx.env
+        .var("DOH_HOST")
+        .map_or("dns.google".to_string(), |x| x.to_string())
+}
+
 pub async fn handler(req: Request, cx: RouteContext<()>) -> Result<Response> {
-    let pre = PREFIXTJ.get_or_init(|| async {
+    let tj_prefix = PREFIXTJ.get_or_init(|| async {
         get_prefix_trojan(&cx).await
     }).await;
+    let dns_host = DOH_HOST.get_or_init(|| async {
+        get_doh_host(&cx).await
+    }).await;
+    
+    let query = match req.url() {
+        Ok(url) => url.query().and_then(|x| Some(x.to_string())),
+        Err(_) => None,
+    };
+
     match req.path().as_str() {
-        "/dns-query" | "/resolve"=> {
-            let host = DOH_HOST.get_or_init(|| async {
-                get_doh_host(&cx).await
-            }).await;
-            
-            api::dns_handler(req, host).await
-        }
-        path if path.starts_with(pre.as_str()) => tj(req, cx).await,
+        "/dns-query" | "/resolve"=> api::resolve_handler(req, dns_host, query).await,
+        path if path.starts_with(tj_prefix.as_str()) => tj(req, cx).await,
         path if path.starts_with("/v2") => api::image_handler(req).await,
         _ => {
             let reg = APIREGEX.get_or_init(|| async {
                 get_regex().await
             }).await;
             
-            let query = match req.url() {
-                Ok(url) => url.query().unwrap_or("").to_string(),
-                Err(_) => "".to_string(),
-            };
             if let Some(captures) = reg.captures(req.path().as_str()) {
                 let domain = captures.name("domain").map_or("", |x| x.as_str());
                 let path = captures.name("path").map_or("", |x| x.as_str());
@@ -88,22 +104,22 @@ pub async fn handler(req: Request, cx: RouteContext<()>) -> Result<Response> {
                 if !domain.contains('.') {
                     return Response::error("Not Found", 404);
                 }
-                let mut full_url = format!("https://{}{}", domain, path);
-                if !query.is_empty() {
-                    full_url.push('?');
-                    full_url.push_str(&query);
+                let mut url = format!("https://{}{}", domain, path);
+                if let Some(v) = query {
+                    url.push('?');
+                    url.push_str(&v);
                 }
                 
-                if let Ok(url) = Url::parse(&full_url) {                   
+                if let Ok(url) = Url::parse(&url) {                   
                     return api::handler(req,  url).await;
                 }
-            } 
+            }
             return Response::error( "Not Found",404);
         }
     }   
 }
 
-pub async fn tj(req: Request, cx: RouteContext<()>) -> Result<Response> {
+pub async fn tj(_req: Request, cx: RouteContext<()>) -> Result<Response> {
     
     let expected_hash = EXPECTED_HASH.get_or_init(|| async {
         get_expected_hash(&cx).await
@@ -111,19 +127,13 @@ pub async fn tj(req: Request, cx: RouteContext<()>) -> Result<Response> {
     let buf_size = *BUFSIZE.get_or_init(|| async {
         get_bufsize(&cx).await
     }).await;
-
+    let dns_host = DOH_HOST.get_or_init(|| async {
+        get_doh_host(&cx).await
+    }).await;
+    
     let WebSocketPair { server, client } = WebSocketPair::new()?;
     let response = Response::from_websocket(client)?;
-    let early_data = req.headers()
-        .get("sec-websocket-protocol")?
-        .and_then(|value| {
-            general_purpose::STANDARD_NO_PAD.decode(value.as_bytes())
-                .ok() 
-                .inspect(|decoded| {
-                    Some(decoded);
-                })
-        });
-
+    // cloudflare not support early data!
     server.accept()?;
     wasm_bindgen_futures::spawn_local(async move {
         let events = server.events().expect("Failed to get event stream");
@@ -131,12 +141,24 @@ pub async fn tj(req: Request, cx: RouteContext<()>) -> Result<Response> {
             &server,
             events,
             buf_size,
-            early_data,
+            None,
             );
 
         let result = match tj::parse(expected_hash,&mut wsstream).await {
             Ok((hostname, port)) => {
-                match Socket::builder().connect( hostname, port) {
+                match dns::is_cf_address(&hostname, dns_host).await {
+                    Ok(true) => {
+                        console_debug!("DNS query success, behind cloudflare for {:?}", &hostname);
+                        //server.close(Some(1000u16), Some("use DoH then connect directly")).ok();
+                        let _ = server.close(Some(1000u16), Some("Cloudflare Host not allowed, use DoH then connect directly"));
+                        return; 
+                    }
+                    Ok(false) => {},
+                    Err(e) => {
+                        console_error!("DNS query failed for {:?}: {}", &hostname, e);
+                    }
+                }
+                match Socket::builder().connect(hostname, port) {
                     Ok(mut upstream) => {
                         match tokio::io::copy_bidirectional(wsstream.as_mut(),&mut upstream).await {
                             Ok(_) => Ok(()),
