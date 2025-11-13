@@ -4,7 +4,7 @@ use tokio::{sync::OnceCell};
 use std::net::{Ipv4Addr};
 use prefix_trie::map::PrefixMap;
 use ipnet::Ipv4Net;
-use crate::proxy::api;
+use simple_dns::Packet;
 
 static CF_CIDR_PREFIX: OnceCell<PrefixMap<Ipv4Net, Option<u8>>> = OnceCell::const_new();
 
@@ -110,7 +110,7 @@ pub async fn is_cf_address(addr: &super::Address, dns_host: &String) -> Result<b
             };
             let req = Request::new_with_init("https://localhost/dns-query", &req_init)?;
             
-            let mut resp = api::resolve_handler(req, dns_host, Some(format!("name={}&type=A", domain))).await?;
+            let mut resp = resolve_handler(req, dns_host, Some(format!("name={}&type=A", domain))).await?;
             let dns_record = resp.json::<DnsJsonResponse>().await?;
             console_debug!("DNS Record: {:?}", dns_record);
             if let Some(records) = dns_record.answer {
@@ -126,3 +126,64 @@ pub async fn is_cf_address(addr: &super::Address, dns_host: &String) -> Result<b
         }
     }
 }
+
+
+
+pub async fn resolve_handler(mut req: Request, host: &String, query: Option<String>) -> Result<Response> {
+    let hops = super::HOP_HEADERS.get_or_init(|| async {
+        super::get_hop_headers().await
+    }).await;
+    let req_headers = Headers::new();
+    for (key, value) in req.headers().entries() {
+        if hops.contains(&key) {
+            continue;
+        }
+        req_headers.set(&key, &value)?;
+    }
+    req_headers.set("host", host.as_str())?;
+
+    let mut req_init = RequestInit {
+        method: req.method(),
+        headers: req_headers,
+        body: None,
+        cf: CfProperties::default(),
+        redirect: RequestRedirect::Follow,
+    };
+    // body if exist
+    if let Ok(body) = req.bytes().await {
+        if !body.is_empty() {
+            req_init.body = Some(wasm_bindgen::JsValue::from(body));
+        }
+    }
+    let mut uri = format!("https://{}{}", host, req.path());
+    if let Some(v) = query {
+        uri.push('?');
+        uri.push_str(&v);
+    }
+
+    let new_req = Request::new_with_init(&uri, &req_init)?;
+    console_debug!("DNS Request: {:?}", new_req);
+    return Fetch::Request(new_req).send().await;
+}
+
+// async fn json_resolve(req: Request, _ctx: Context) -> Result<Response> {
+// }
+
+// async fn bin_resolve(req: Request, _ctx: Context) -> Result<Response> {
+//     if let Ok(mut data) = resp {
+//         let body = data.bytes().await.map_err(|e| {
+//             Error::RustError(format!("Failed to read response body: {:?}", e))
+//         })?;
+        
+//         let mut buf = Vec::with_capacity(256);
+//         if let Ok(package) = Packet::parse(&body) {
+//             package.write_to(&mut buf).unwrap();
+//         }
+//         console_debug!("DNS Response: {:?}, vec length: {}", Packet::parse(&body), buf.len());
+//         return Ok(Response::builder()
+//             .with_status(data.status_code())
+//             .with_headers(data.headers().clone())
+//             .body(ResponseBody::Body(buf)));
+//     }
+//     Ok(resp?)
+// }
