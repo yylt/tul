@@ -6,13 +6,13 @@
 
 ## ✨ 特性
 
-🔒 基于 WebSocket 的 Trojan 协议 - 通过 WebSocket 传输的安全代理协议
+🔒 基于 WebSocket 的 Trojan 协议 - 通过 WebSocket 传输的安全代理协议，后端基于 IP 分流，CF 目标地址会 block
 
 🌐 通用 API 代理 - 通过单一端点路由任何 API 请求
 
 🐳 灵活镜像仓库支持 - 默认从 Docker Hub 拉取，并支持任意容器镜像仓库
 
-🔍 安全 DNS 解析 - 支持 DoH（DNS over HTTPS）协议，默认使用 1.1.1.1 进行安全域名解析
+🔍 安全 DNS 解析 - 支持 DoH（DNS over HTTPS）协议，并对 CF 地址优选
 
 ⚡ WASM 驱动 - 高性能 Rust 实现
 
@@ -21,7 +21,7 @@
 ## 📖 使用指南
 
 ### Trojan over WebSocket 模式
-配置支持 WebSocket 连接的 Trojan 客户端，修改 [v2ray 配置](./hack/config.json) 并运行：
+配置支持 WebSocket 连接的 Trojan 客户端，修改 [v2ray 配置](./hack/config.json) 并运行，注意目标地址是 CF 地址建议配置浏览器直连，详见下文 DoH 模式
 ```sh
 $ v2ray -c ./hack/config.json
 ```
@@ -58,7 +58,7 @@ docker pull your-worker.your-subdomain.workers.dev/library/ubuntu:latest
 ```
 
 ### DoH(DNS over HTTPS) 模式
-代理 DNS 查询请求，这对使用 cloudflare 代理网站很重要，如 linux.do, v2ex.com 等
+代理 DNS 查询请求，如访问 cloudflare 代理网站可直连，如 linux.do, v2ex.com 等
 ```bash
 
 # 测试请求
@@ -68,33 +68,15 @@ curl -s "https://1.1.1.1/dns-query?name=v2ex.com&type=A" -H "accept: application
 curl -s "https://your-worker.your-subdomain.workers.dev/dns-query?name=v2ex.com&type=A" -H "accept: application/dns-json" 
 ```
 
+配置浏览器使用 DoH 代理，参考[这里](https://help.aliyun.com/document_detail/2868691.html)
 
 ## 🚀 快速开始
 
 ### 先决条件
 - 拥有 API 访问权限的 Cloudflare 账户
+- 建议绑定域名，通常 workers.dev 域名无法访问
 
 ## 🎨 部署
-
-### 简易部署
-点击下方按钮：
-
-[![Deploy to Cloudflare Workers](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/)
-
-并访问 https://{YOUR-WORKERS-SUBDOMAIN}.workers.dev 
-
-### 手动部署
-1. 从 Cloudflare 仪表板 [创建 API 令牌](https://developers.cloudflare.com/fundamentals/api/get-started/create-token/)。
-2. 更新 `.env` 文件并根据您的令牌填写值
-
-| 变量名               | 描述                                           |
-|---------------------|--------------------------------------------------|
-| CLOUDFLARE_API_TOKEN | 从 Cloudflare 仪表板获取的 API 密钥            |
-
-3. 部署
-```sh
-$ make deploy
-```
 
 ### Fork 并部署（推荐）
 
@@ -107,7 +89,7 @@ $ make deploy
     - 导航到您 fork 的仓库页面
     - 点击顶部的 `Settings` 标签
     - 从左侧边栏选择 `Secrets and variables` -> `Actions`
-    - 点击 `New repository secret` 按钮
+    - 点击 `New repository secret` 按钮，见[图例](./img/action3.png)
     - 在 `Name` 输入框中输入 `CLOUDFLARE_API_TOKEN`
     - 将您的 Cloudflare API 令牌粘贴到 `Value` 输入框中
     - 点击 `Add secret` 按钮保存
@@ -115,8 +97,8 @@ $ make deploy
 
 3.  **触发部署**
     - 转到您 fork 仓库的 `Actions` 标签
-    - 从左侧列表中选择名为 **"Deploy"**（或类似名称）的工作流
-    - 点击 `Run workflow` 按钮，如果需要请选择分支，然后确认以开始部署
+    - 从左侧列表中选择名为 **"Deploy"**（或类似名称）的工作流，见[图例](./img/action1.png)
+    - 点击 `Run workflow` 按钮，如果需要请选择分支，然后确认以开始部署，见[图例](./img/action2.png)
     - 等待工作流完成并检查部署状态
 
 ## 🙏 致谢
