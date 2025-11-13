@@ -109,7 +109,7 @@ pub async fn handler(mut req: Request, uri: Url) -> Result<Response> {
                     format!("/{}{}", uri.host().unwrap(), value)
                 } else if value.starts_with("https://") {
                     if let Ok(url) = Url::parse(&value) {
-                        if url.host_str().map_or(false, |host| host.contains("cloudflare")) {
+                        if url.host_str().map_or(false, |host| host.contains("cloudflarestorage")) {
                             value
                         } else {
                             value.replace("https://", &format!("http://{}/", my_host))
