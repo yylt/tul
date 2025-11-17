@@ -1,7 +1,7 @@
 use worker::*;
 use serde::{Deserialize, Serialize};
 use tokio::{sync::OnceCell};
-use std::net::{Ipv4Addr};
+use std::{collections::HashMap, net::Ipv4Addr};
 use prefix_trie::map::PrefixMap;
 use ipnet::Ipv4Net;
 use crate::proxy::api;
@@ -81,20 +81,20 @@ async fn get_cf_cidr_prefix() -> PrefixMap<Ipv4Net, Option<u8>> {
 }
 
 
-pub async fn is_cf_address(addr: &super::Address, dns_host: &String) -> Result<bool> {
+pub async fn is_cf_address(addr: &super::Address, dns_host: &String) -> Result<(bool, Ipv4Addr)> {
     let trie = CF_CIDR_PREFIX.get_or_init(|| async {
         get_cf_cidr_prefix().await
     }).await;
-    let v4fn = |ip: &Ipv4Addr| {
-        let ip = Ipv4Net::new(ip.clone(), 32).or_else(|e|{
+    let v4fn = |ip: &Ipv4Addr| -> Result<(bool, Ipv4Addr)> {
+        let ipnet = Ipv4Net::new(ip.clone(), 32).or_else(|e|{
             console_error!("parse ipv4 failed: {}", e);
             Err(Error::RustError(e.to_string()))
         })?;
-        return  Ok(trie.get_lpm(&ip).is_some());
+        return Ok((trie.get_lpm(&ipnet).is_some(), ip.clone()));
     };
-
+    
     match addr {
-        super::Address::Ipv6(_) => Ok(false),
+        super::Address::Ipv6(_) => Err(Error::Infallible),
         super::Address::Ipv4(ipv4) => v4fn(ipv4),
         super::Address::Domain(domain) => {
             let header = Headers::new();
@@ -109,20 +109,25 @@ pub async fn is_cf_address(addr: &super::Address, dns_host: &String) -> Result<b
                 redirect: RequestRedirect::Follow,
             };
             let req = Request::new_with_init("https://localhost/dns-query", &req_init)?;
-            
-            let mut resp = api::resolve_handler(req, dns_host, Some(format!("name={}&type=A", domain))).await?;
+            let mut map = HashMap::new();
+            map.insert("name".to_string(), domain.to_string());
+            map.insert("type".to_string(), "A".to_string());
+
+            let mut resp = api::resolve_handler(req, dns_host, Some(map)).await?;
             let dns_record = resp.json::<DnsJsonResponse>().await?;
             console_debug!("DNS Record: {:?}", dns_record);
             if let Some(records) = dns_record.answer {
-                if let Some(answer) = records.first() {
-                    let ip = answer.data.parse::<Ipv4Addr>().or_else(|e|{
-                        console_error!("parse ipv4 failed: {}", e);
-                        Err(Error::RustError(e.to_string()))
-                    })?;
-                    return v4fn(&ip);
+                for answer in records {
+                    if answer.rtype == 1 {  
+                        let ip = answer.data.parse::<Ipv4Addr>().or_else(|e| {
+                            console_error!("parse ipv4 failed: {}", e);
+                            Err(Error::RustError(e.to_string()))
+                        })?;
+                        return v4fn(&ip);
+                    }
                 }
             }
-            Ok(false)
+            Err(Error::Infallible)
         }
     }
 }
