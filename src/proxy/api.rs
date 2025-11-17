@@ -41,10 +41,10 @@ async fn get_hop_headers() -> HashSet<String> {
     headers
 }
 
-pub async fn image_handler(req: Request) -> Result<Response> {
+pub async fn image_handler(req: Request, query: Option<HashMap<String, String>>) -> Result<Response> {
     let req_url = req.url()?;
-    let domain   = req.query().map_or(REGISTRY, |query: HashMap<String, String>| {
-        match query.get("ns").map(|s| s.as_str()) {
+    let domain = query.map_or(REGISTRY, |q|{
+        match q.get("ns").map(|s| s.as_str()) {
             Some("gcr.io") => "gcr.io",
             Some("quay.io") => "quay.io",
             Some("ghcr.io") => "ghcr.io",
@@ -52,6 +52,7 @@ pub async fn image_handler(req: Request) -> Result<Response> {
             _ => REGISTRY,
         }
     });
+
     let full_url = format!("https://{}{}", domain, req_url.path());
     if let Ok(url) = Url::parse(&full_url) {                   
         return handler(req,  url).await;
@@ -84,7 +85,7 @@ pub async fn handler(mut req: Request, uri: Url) -> Result<Response> {
         cf: CfProperties::default(),
         redirect: RequestRedirect::Manual,
     };
-    // body if exist
+    // request body
     if let Ok(body) = req.bytes().await {
         if !body.is_empty() {
             req_init.body = Some(wasm_bindgen::JsValue::from(body));
@@ -128,19 +129,22 @@ pub async fn handler(mut req: Request, uri: Url) -> Result<Response> {
         };
         resp_header.set(&key, &new_value)?;
     }
+    let resp = match response.stream() {
+        Err(_) => Response::builder()
+            .with_status(status)
+            .with_headers(resp_header)
+            .empty(),
+        Ok(stream) => Response::builder()
+            .with_status(status)
+            .with_headers(resp_header)
+            .from_stream(stream)?,
+    };
 
-    let body = response.bytes().await.map_err(|e| {
-        Error::RustError(format!("Failed to read response body: {:?}", e))
-    })?;
-
-    return Ok(Response::builder()
-        .with_status(status)
-        .with_headers(resp_header)
-        .body(ResponseBody::Body(body.to_vec())));    
+    return Ok(resp);
 } 
 
 
-pub async fn resolve_handler(mut req: Request, host: &String, query: Option<String>) -> Result<Response> {
+pub async fn resolve_handler(mut req: Request, host: &String, query: Option<HashMap<String, String>>) -> Result<Response> {
     let hops = HOP_HEADERS.get_or_init(|| async {
         get_hop_headers().await
     }).await;
@@ -169,7 +173,11 @@ pub async fn resolve_handler(mut req: Request, host: &String, query: Option<Stri
     let mut uri = format!("https://{}{}", host, req.path());
     if let Some(v) = query {
         uri.push('?');
-        uri.push_str(&v);
+        uri.push_str(v.iter()
+            .map(|(k, v)| format!("{}={}", k, v))
+            .collect::<Vec<_>>()
+            .join("&")
+            .as_str());
     }
 
     let new_req = Request::new_with_init(&uri, &req_init)?;
