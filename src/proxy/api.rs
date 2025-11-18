@@ -35,9 +35,6 @@ async fn get_hop_headers() -> HashSet<String> {
     headers.insert("cf-ipcountry".to_string());
     headers.insert("cf-request-id".to_string());
 
-    // content had decoded
-    headers.insert("content-encoding".to_string());
-
     headers
 }
 
