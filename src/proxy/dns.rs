@@ -6,7 +6,7 @@ use prefix_trie::map::PrefixMap;
 use ipnet::Ipv4Net;
 use crate::proxy::api;
 
-static CF_CIDR_PREFIX: OnceCell<PrefixMap<Ipv4Net, Option<u8>>> = OnceCell::const_new();
+static CF_CIDR_PREFIX: OnceCell<PrefixMap<Ipv4Net, Option<()>>> = OnceCell::const_new();
 
 // DNS JSON API response format
 #[derive(Debug, Serialize, Deserialize)]
@@ -54,7 +54,7 @@ pub struct DnsAnswer {
 }
 
 
-async fn get_cf_cidr_prefix() -> PrefixMap<Ipv4Net, Option<u8>> {
+async fn get_cf_cidr_prefix() -> PrefixMap<Ipv4Net, Option<()>> {
     // TODO fetch from cloudflare
     let ipv4s = vec![
         "103.22.200.0/22"
@@ -73,9 +73,9 @@ async fn get_cf_cidr_prefix() -> PrefixMap<Ipv4Net, Option<u8>> {
         ,"198.41.128.0/17"
    ];
 
-   let mut pm: PrefixMap<Ipv4Net, Option<u8>> = PrefixMap::new();
+   let mut pm: PrefixMap<Ipv4Net, Option<()>> = PrefixMap::new();
    for ip in ipv4s {
-       pm.insert(ip.parse().unwrap(), Some(1));
+       pm.insert(ip.parse().unwrap(), Some(()));
    }
    pm
 }
