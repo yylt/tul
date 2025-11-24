@@ -1,7 +1,10 @@
 
 use worker::*;
-use std::collections::{HashSet, HashMap};
+use std::{
+    collections::{HashSet, HashMap}
+};
 use tokio::{sync::OnceCell};
+use regex::Regex;
 
 static HOP_HEADERS: OnceCell<HashSet<String>> = OnceCell::const_new();
 static REGISTRY: &str = "registry-1.docker.io";
@@ -36,6 +39,27 @@ async fn get_hop_headers() -> HashSet<String> {
     headers.insert("cf-request-id".to_string());
 
     headers
+}
+
+fn replace_with_regex(content: &mut String, dst_host: &str, my_host: &str) -> Result<String> {
+
+    let re = Regex::new(r#"(?P<attr>src|href)(?P<eq>=)(?P<quote>['"]?)(?P<url>(//|https://))"#)
+        .map_err(|_e| Error::BadEncoding)?;
+    
+    let result = re.replace_all(&content, |caps: &regex::Captures| {
+        let attr = &caps["attr"];
+        let eq = &caps["eq"];
+        let quote = &caps["quote"];
+        let url = &caps["url"];
+
+        if url.starts_with("https://") || url.starts_with("//") {
+            format!("{}{}{}https://{}/", attr, eq, quote, my_host)
+        } else {
+            caps[0].to_string()
+        }
+    });
+    return Ok(result.into_owned()
+        .replace(&format!("//{}", dst_host), &format!("//{}/{}", my_host, dst_host)));
 }
 
 pub async fn image_handler(req: Request, query: Option<HashMap<String, String>>) -> Result<Response> {
@@ -74,6 +98,7 @@ pub async fn handler(mut req: Request, uri: Url) -> Result<Response> {
         req_headers.set(&key, &value)?;
     }
     req_headers.set("host", dst_host)?;
+    req_headers.set("referer", "")?;
 
     let mut req_init = RequestInit {
         method: req.method(),
@@ -92,7 +117,7 @@ pub async fn handler(mut req: Request, uri: Url) -> Result<Response> {
 
     // send request
     let mut response = Fetch::Request(new_req).send().await?;
-
+   
     // update response
     let resp_header = Headers::new();
     let status = response.status_code();
@@ -125,6 +150,23 @@ pub async fn handler(mut req: Request, uri: Url) -> Result<Response> {
             _ => value,
         };
         resp_header.set(&key, &new_value)?;
+    }
+    let _ = resp_header.delete("content-security-policy");
+    let _ = resp_header.set("access-control-allow-origin", "*");
+    match resp_header.get("content-type")? {
+        Some(s) => {
+            if s.contains("text/html")  {
+                let mut body = response.text().await?;
+                let newbody = replace_with_regex(&mut body, dst_host, &my_host)?;
+                let _ = resp_header.delete("content-encoding");
+                let resp = Response::builder()
+                    .with_headers(resp_header)
+                    .with_status(status)
+                    .body(ResponseBody::Body(newbody.into_bytes()));
+                return Ok(resp);
+            }
+        },
+        _ => {}
     }
     let resp = match response.stream() {
         Err(_) => Response::builder()
@@ -178,6 +220,6 @@ pub async fn resolve_handler(mut req: Request, host: &String, query: Option<Hash
     }
 
     let new_req = Request::new_with_init(&uri, &req_init)?;
-    console_debug!("DNS Request: {:?}", new_req);
+    //console_debug!("DNS Request: {:?}", new_req);
     return Fetch::Request(new_req).send().await;
 }

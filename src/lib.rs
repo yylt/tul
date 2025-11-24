@@ -14,6 +14,7 @@ async fn fetch(
    
     Router::new()
         .on_async("/*path", handler)
+        .on_async("/", handler)
         .run(req, env)
         .await 
 }

@@ -12,8 +12,8 @@ homepage = "https://github.com/yylt/tul"
 crate-type = ["cdylib"]
 
 [dependencies]
-worker = { version = "0.6.7", features = ["http"] }
-worker-macros = { version = "0.6.7" }
+worker = { version = "0.7.0", features = ["http"] }
+worker-macros = { version = "0.7.0" }
 futures = "0.3.31"
 wasm-bindgen-futures = "0.4.55"
 
