@@ -28,16 +28,16 @@
 $ v2ray -c ./hack/config.json
 ```
 
-- <details>
-  <summary><strong>🚨 访问故障排除指南（必读）</strong></summary>
+<details>
+<summary><strong>🚨 访问故障排除指南（必读）</strong></summary>
 
-  💡 **解决方案**：通常因为目标为 CloudFlare 节点  建议配置 DoH 并直连 
+💡 **解决方案**：通常因为目标为 CloudFlare 节点  建议配置 DoH 并直连 
 
-  ⚠️ **特别注意**：国内 DoH 被污染，请谨慎选择 DoH 服务商  
+⚠️ **特别注意**：国内 DoH 被污染，请谨慎选择 DoH 服务商  
 
-  📖 **技术原理**：浏览器使用 ECH 建立 TLS 连接前，会用 DoH 查询 HTTPS 记录
+📖 **技术原理**：浏览器使用 ECH 建立 TLS 连接前，会用 DoH 查询 HTTPS 记录
 
-  </details>
+</details>
 
 ### 通用 API 代理模式
 代理任何 API 请求：
@@ -49,14 +49,17 @@ curl https://api.openai.com/v1/chat/completions
 curl https://your-worker.your-subdomain.workers.dev/api.openai.com/v1/chat/completions
 ```
 
-📥 下载注意事项
+<details>
+<summary><strong>📥 下载注意事项</strong></summary>
 
-注意：读写超时时间为 10s，如超出后会导致文件被意外截断。建议使用断点续传来下载大文件，curl 和 wget 命令如下：
+⚠️ **特别注意**：读写超时时间为 10s，如超出后会导致文件被意外截断。建议使用断点续传来下载大文件，curl 和 wget 命令如下：
 
 ```bash
 curl -C - -O [URL]	 # -C - 自动续传，-O 保存为原始文件名。
 wget -c [URL]	# -c 启用断点续传。
 ```
+
+</details>
 
 ### docker 镜像代理模式
 代理 docker.io 拉取镜像请求
@@ -81,6 +84,8 @@ curl -s "https://your-worker.your-subdomain.workers.dev/dns-query?name=v2ex.com&
 
 配置浏览器使用 DoH 代理，参考[这里](https://help.aliyun.com/document_detail/2868691.html)
 
+建议使用 smartdns + v2ray-rules-dat 对不同域名的解析分流，参考[这里](https://pymumu.github.io/smartdns/config/basic-config/)
+
 ### 站点镜像模式
 可以用作镜像站点，使用方式如下
 ```bash
@@ -91,16 +96,16 @@ https://your-worker.your-subdomain.workers.dev/www.example.com
 https://your-worker.your-subdomain.workers.dev/github.com
 ```
 
-- <details>
-  <summary><strong>⚠️ 访问注意事项（必读）</strong></summary>
+<details>
+<summary><strong>⚠️ 访问注意事项</strong></summary>
 
-  💡 **问题描述**：站点无法访问或部分资源无法加载
+💡 **问题描述**：站点无法访问或部分资源无法加载
 
-  ⚠️ **原因**：在JS内有检查或跨域请求外部资源，导致无法正常访问
+⚠️ **原因**：在JS内有检查或跨域请求外部资源，导致无法正常访问
 
-  📖 **技术原理**：第一次访问时，设置 cookie 指定镜像站点；对 text/html 资源内容进行替换
+📖 **技术原理**：第一次访问时，设置 cookie 指定镜像站点；对 text/html 资源内容进行替换
 
-  </details>
+</details>
 
 
 
