@@ -13,7 +13,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 worker = { version = "0.7.1", features = ["http"] }
-worker-macros = { version = "0.7.0" }
+worker-macros = { version = "0.7.2" }
 futures = "0.3.31"
 wasm-bindgen-futures = "0.4.56"
 
