@@ -1,12 +1,14 @@
-use worker::*;
+
+use super::*;
 use serde::{Deserialize, Serialize};
 use tokio::{sync::OnceCell};
 use std::{collections::HashMap, net::Ipv4Addr};
-use prefix_trie::map::PrefixMap;
-use ipnet::Ipv4Net;
-use crate::proxy::api;
 
-static CF_CIDR_PREFIX: OnceCell<PrefixMap<Ipv4Net, Option<()>>> = OnceCell::const_new();
+use prefix_trie::set::PrefixSet;
+use ipnet::Ipv4Net;
+
+
+static CF_TRIE: OnceCell<PrefixSet<Ipv4Net>> = OnceCell::const_new();
 
 // DNS JSON API response format
 #[derive(Debug, Serialize, Deserialize)]
@@ -54,7 +56,7 @@ pub struct DnsAnswer {
 }
 
 
-async fn get_cf_cidr_prefix() -> PrefixMap<Ipv4Net, Option<()>> {
+async fn get_cf_trie() -> PrefixSet<Ipv4Net> {
     // TODO fetch from cloudflare
     let ipv4s = vec![
         "103.22.200.0/22"
@@ -73,28 +75,28 @@ async fn get_cf_cidr_prefix() -> PrefixMap<Ipv4Net, Option<()>> {
         ,"198.41.128.0/17"
    ];
 
-   let mut pm: PrefixMap<Ipv4Net, Option<()>> = PrefixMap::new();
+   let mut pm: PrefixSet<Ipv4Net> = PrefixSet::new();
    for ip in ipv4s {
-       pm.insert(ip.parse().unwrap(), Some(()));
+       pm.insert(ip.parse().unwrap());
    }
    pm
 }
 
 
 pub async fn is_cf_address(addr: &super::Address, dns_host: &String) -> Result<(bool, Ipv4Addr)> {
-    let trie = CF_CIDR_PREFIX.get_or_init(|| async {
-        get_cf_cidr_prefix().await
+    let trie = CF_TRIE.get_or_init(|| async {
+        get_cf_trie().await
     }).await;
     let v4fn = |ip: &Ipv4Addr| -> Result<(bool, Ipv4Addr)> {
         let ipnet = Ipv4Net::new(ip.clone(), 32).or_else(|e|{
             console_error!("parse ipv4 failed: {}", e);
-            Err(Error::RustError(e.to_string()))
+            Err(worker::Error::RustError(e.to_string()))
         })?;
         return Ok((trie.get_lpm(&ipnet).is_some(), ip.clone()));
     };
     
     match addr {
-        super::Address::Ipv6(_) => Err(Error::Infallible),
+        super::Address::Ipv6(_) => Err(worker::Error::Infallible),
         super::Address::Ipv4(ipv4) => v4fn(ipv4),
         super::Address::Domain(domain) => {
             let header = Headers::new();
@@ -113,7 +115,7 @@ pub async fn is_cf_address(addr: &super::Address, dns_host: &String) -> Result<(
             map.insert("name".to_string(), domain.to_string());
             map.insert("type".to_string(), "A".to_string());
 
-            let mut resp = api::resolve_handler(req, dns_host, Some(map)).await?;
+            let mut resp = resolve_handler(req, dns_host, Some(map)).await?;
             let dns_record = resp.json::<DnsJsonResponse>().await?;
             console_debug!("DNS Record: {:?}", dns_record);
             if let Some(records) = dns_record.answer {
@@ -121,13 +123,55 @@ pub async fn is_cf_address(addr: &super::Address, dns_host: &String) -> Result<(
                     if answer.rtype == 1 {  
                         let ip = answer.data.parse::<Ipv4Addr>().or_else(|e| {
                             console_error!("parse ipv4 failed: {}", e);
-                            Err(Error::RustError(e.to_string()))
+                            Err(worker::Error::RustError(e.to_string()))
                         })?;
                         return v4fn(&ip);
                     }
                 }
             }
-            Err(Error::Infallible)
+            Err(worker::Error::Infallible)
         }
     }
+}
+
+
+pub async fn resolve_handler(mut req: Request, host: &String, query: Option<HashMap<String, String>>) -> Result<Response> {
+    let hops = HOP_HEADERS.get_or_init(|| async {
+        get_hop_headers().await
+    }).await;
+    let req_headers = Headers::new();
+    for (key, value) in req.headers().entries() {
+        if hops.contains(&key) {
+            continue;
+        }
+        req_headers.set(&key, &value)?;
+    }
+    req_headers.set("host", host.as_str())?;
+
+    let mut req_init = RequestInit {
+        method: req.method(),
+        headers: req_headers,
+        body: None,
+        cf: CfProperties::default(),
+        redirect: RequestRedirect::Follow,
+    };
+    // body if exist
+    if let Ok(body) = req.bytes().await {
+        if !body.is_empty() {
+            req_init.body = Some(wasm_bindgen::JsValue::from(body));
+        }
+    }
+    let mut uri = format!("https://{}{}", host, req.path());
+    if let Some(v) = query {
+        uri.push('?');
+        uri.push_str(v.iter()
+            .map(|(k, v)| format!("{}={}", k, v))
+            .collect::<Vec<_>>()
+            .join("&")
+            .as_str());
+    }
+
+    let new_req = Request::new_with_init(&uri, &req_init)?;
+    //console_debug!("DNS Request: {:?}", new_req);
+    return Fetch::Request(new_req).send().await;
 }

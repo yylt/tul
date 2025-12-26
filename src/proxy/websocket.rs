@@ -19,12 +19,12 @@ pin_project! {
 }
 
 impl<'a> WsStream<'a> {
-    pub fn new(ws: &'a WebSocket, events: EventStream<'a>, bufsize: usize, early_data: Option<Vec<u8>>) -> Self {
+    pub fn new(ws: &'a WebSocket, events: EventStream<'a>, early_data: Option<Vec<u8>>) -> Self {
         let mut s  = Self { 
             ws, 
             events ,
-            read_buffer: Vec::with_capacity(bufsize),
-            write_buffer: Vec::with_capacity(bufsize),
+            read_buffer: Vec::with_capacity(2048),
+            write_buffer: Vec::with_capacity(2048),
             is_closed: false,
         };
         if let Some(early_data) = early_data {
