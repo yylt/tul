@@ -28,7 +28,7 @@ fn replace_host(content: &mut String, src: &str, dest: &str) -> Result<String> {
         .replace(&format!("//{}", src), &format!("//{}/{}", dest, src)));
 }
 
-pub async fn image_handler(req: Request, query: Option<HashMap<String, String>>) -> Result<Response> {
+pub async fn image_handler(req: Request, query: Option<HashMap<String, String>>, forward_host: Option<&String>) -> Result<Response> {
     let req_url = req.url()?;
     let domain = query.map_or(REGISTRY, |q|{
         match q.get("ns").map(|s| s.as_str()) {
@@ -41,20 +41,20 @@ pub async fn image_handler(req: Request, query: Option<HashMap<String, String>>)
     });
 
     let full_url = format!("https://{}{}", domain, req_url.path());
-    if let Ok(url) = Url::parse(&full_url) {                   
-        return handler(req,  url).await;
+    if let Ok(url) = Url::parse(&full_url) {
+        return handler(req,  url, domain).await;
     }
     return Response::error( "Not Found",404);
 }
 
-pub async fn handler(mut req: Request, uri: Url) -> Result<Response> {
+pub async fn handler(mut req: Request, uri: Url, dst_host: &str) -> Result<Response> {
     let hops = HOP_HEADERS.get_or_init(|| async {
         get_hop_headers().await
     }).await;
     let my_host = req.headers()
         .get("host")?
         .ok_or("Host header not found")?;
-    let dst_host = uri.host_str().ok_or("Host not found")?;
+
     // build request
     let req_headers = Headers::new();
     for (key, value) in req.headers().entries() {
