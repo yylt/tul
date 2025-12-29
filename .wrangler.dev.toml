@@ -4,4 +4,3 @@ compatibility_date = "2025-01-10"
 
 [build]
 command = "command -v worker-build &> /dev/null && worker-build --dev || cargo install -q worker-build && worker-build --dev"
-

@@ -7,6 +7,7 @@ use futures::StreamExt;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
+static BUFSIZE: usize = 4096;
 
 pin_project! {
     pub struct WsStream<'a> {
@@ -23,8 +24,8 @@ impl<'a> WsStream<'a> {
         let mut s  = Self { 
             ws, 
             events ,
-            read_buffer: Vec::with_capacity(2048),
-            write_buffer: Vec::with_capacity(2048),
+            read_buffer: Vec::with_capacity(BUFSIZE),
+            write_buffer: Vec::with_capacity(BUFSIZE),
             is_closed: false,
         };
         if let Some(early_data) = early_data {

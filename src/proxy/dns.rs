@@ -55,7 +55,7 @@ pub struct DnsAnswer {
     pub data: String,
 }
 
-
+// ref: https://www.cloudflare.com/ips
 async fn get_cf_trie() -> PrefixSet<Ipv4Net> {
     // TODO fetch from cloudflare
     let ipv4s = vec![
@@ -83,7 +83,7 @@ async fn get_cf_trie() -> PrefixSet<Ipv4Net> {
 }
 
 
-pub async fn is_cf_address(addr: &super::Address, dns_host: &String) -> Result<(bool, Ipv4Addr)> {
+pub async fn is_cf_address<T: AsRef<str>>(addr: &super::Address<T>) -> Result<(bool, Ipv4Addr)> {
     let trie = CF_TRIE.get_or_init(|| async {
         get_cf_trie().await
     }).await;
@@ -94,9 +94,9 @@ pub async fn is_cf_address(addr: &super::Address, dns_host: &String) -> Result<(
         })?;
         return Ok((trie.get_lpm(&ipnet).is_some(), ip.clone()));
     };
-    
+    // TODO: only 1.1.1.1 support RFC 8484 and JSON API
+    let resolve = "1.1.1.1";
     match addr {
-        super::Address::Ipv6(_) => Err(worker::Error::Infallible),
         super::Address::Ipv4(ipv4) => v4fn(ipv4),
         super::Address::Domain(domain) => {
             let header = Headers::new();
@@ -110,12 +110,12 @@ pub async fn is_cf_address(addr: &super::Address, dns_host: &String) -> Result<(
                 cf: CfProperties::default(),
                 redirect: RequestRedirect::Follow,
             };
-            let req = Request::new_with_init("https://localhost/dns-query", &req_init)?;
+            let req = Request::new_with_init("https://lo/dns-query", &req_init)?;
             let mut map = HashMap::new();
-            map.insert("name".to_string(), domain.to_string());
+            map.insert("name".to_string(), domain.as_ref().to_string());
             map.insert("type".to_string(), "A".to_string());
 
-            let mut resp = resolve_handler(req, dns_host, Some(map)).await?;
+            let mut resp = resolve_handler(req, resolve, Some(map)).await?;
             let dns_record = resp.json::<DnsJsonResponse>().await?;
             console_debug!("DNS Record: {:?}", dns_record);
             if let Some(records) = dns_record.answer {
@@ -135,7 +135,7 @@ pub async fn is_cf_address(addr: &super::Address, dns_host: &String) -> Result<(
 }
 
 
-pub async fn resolve_handler(mut req: Request, host: &String, query: Option<HashMap<String, String>>) -> Result<Response> {
+pub async fn resolve_handler<T: AsRef<str>>(mut req: Request, host: T, query: Option<HashMap<String, String>>) -> Result<Response> {
     let hops = HOP_HEADERS.get_or_init(|| async {
         get_hop_headers().await
     }).await;
@@ -146,7 +146,7 @@ pub async fn resolve_handler(mut req: Request, host: &String, query: Option<Hash
         }
         req_headers.set(&key, &value)?;
     }
-    req_headers.set("host", host.as_str())?;
+    req_headers.set("host", host.as_ref())?;
 
     let mut req_init = RequestInit {
         method: req.method(),
@@ -161,7 +161,7 @@ pub async fn resolve_handler(mut req: Request, host: &String, query: Option<Hash
             req_init.body = Some(wasm_bindgen::JsValue::from(body));
         }
     }
-    let mut uri = format!("https://{}{}", host, req.path());
+    let mut uri = format!("https://{}{}", host.as_ref(), req.path());
     if let Some(v) = query {
         uri.push('?');
         uri.push_str(v.iter()

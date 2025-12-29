@@ -23,88 +23,78 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: |
-          # 定义需要检查的密钥列表
-          SECRET_NAMES=("PASSWORD" "PREFIX")
-          
           # 检查Worker中是否存在指定的secret变量
           set +e
           SECRET_LIST_OUTPUT=$(npx wrangler secret list 2>&1)
           set -e
 
-          # 遍历检查每个密钥
-          for SECRET_NAME in "${SECRET_NAMES[@]}"; do
-            if echo "$SECRET_LIST_OUTPUT" | grep -q "$SECRET_NAME"; then
-              echo "✅ Worker中已存在${SECRET_NAME}(作为secret变量)"
-              declare "WORKER_HAS_${SECRET_NAME}"=true
-            else
-              echo "⚠️ Worker中未检测到${SECRET_NAME}(作为secret变量)"
-              declare "WORKER_HAS_${SECRET_NAME}"=false
-            fi
-          done
+          # 定义 secret 变量名称
+          SECRET_NAMES=("PASSWORD" "PREFIX" "PROXY_DOMAINS" "FORWARD_HOST")
 
-          # 处理每个密钥
+          get_github_secret() {
+              local secret_name="$1"
+              case "$secret_name" in
+                  "PASSWORD")
+                      echo "${{ secrets.PASSWORD }}"
+                      ;;
+                  "PREFIX")
+                      echo "${{ secrets.PREFIX }}"
+                      ;;
+                  "PROXY_DOMAINS")
+                      echo "${{ secrets.PROXY_DOMAINS }}"
+                      ;;
+                  "FORWARD_HOST")
+                      echo "${{ secrets.FORWARD_HOST }}"
+                      ;;
+                  *)
+                      echo ""
+                      ;;
+              esac
+          }
           for SECRET_NAME in "${SECRET_NAMES[@]}"; do
-            # 动态获取变量名
-            HAS_SECRET_VAR="WORKER_HAS_${SECRET_NAME}"
-            WORKER_HAS_SECRET="${!HAS_SECRET_VAR}"
-            
-            echo "--- 处理 ${SECRET_NAME} ---"
-            
-            # 如果Worker中已有密钥，则跳过创建
-            if [[ "$WORKER_HAS_SECRET" == "true" ]]; then
-              echo "✅ Worker中已存在${SECRET_NAME}(作为secret变量)，跳过创建步骤"
-            else
+              echo "--- 处理 ${SECRET_NAME} ---"
               
-              if [[ "$SECRET_NAME" == "PASSWORD" ]]; then
-                if [[ -n "${{ secrets.PASSWORD }}" ]]; then
-                  echo "使用GitHub中配置的PASSWORD值"
-                  SECRET_VALUE="${{ secrets.PASSWORD }}"
-                else
-                  echo "!!! 未找到GitHub中配置的${SECRET_NAME}值，将使用默认值"
-                  break
-                fi
-              elif [[ "$SECRET_NAME" == "PREFIX" ]]; then
-                if [[ -n "${{ secrets.PREFIX }}" ]]; then
-                  echo "使用GitHub中配置的PREFIX值"
-                  SECRET_VALUE="${{ secrets.PREFIX }}"
-                else
-                  echo "!!! 未找到GitHub中配置的${SECRET_NAME}值，将使用默认值"
-                  break
-                fi
+              if echo "$SECRET_LIST_OUTPUT" | grep -q "$SECRET_NAME"; then
+                echo "✅ Worker中已存在${SECRET_NAME}, 跳过更新"
+                continue
               fi
               
-              set +e
-              echo "正在设置${SECRET_NAME}..."
-              SECRET_PUT_OUTPUT=$(echo "$SECRET_VALUE" | npx wrangler secret put "$SECRET_NAME" 2>&1)
-              SECRET_RESULT=$?
-              set -e
+              GITHUB_VALUE=$(get_github_secret "$SECRET_NAME")
 
-              echo "Secret put 输出:"
-              echo "$SECRET_PUT_OUTPUT" | grep -v "Please update to the latest version"
+              if [[ -n "$GITHUB_VALUE" ]]; then
+                set +e
+                echo "正在设置${SECRET_NAME}..."
+                SECRET_PUT_OUTPUT=$(echo "$GITHUB_VALUE" | npx wrangler secret put "$SECRET_NAME" 2>&1)
+                SECRET_RESULT=$?
+                set -e
 
-              if [ $SECRET_RESULT -ne 0 ]; then
-                # 如果错误是由于密钥已存在导致的，视为成功
-                if echo "$SECRET_PUT_OUTPUT" | grep -q -E "(already in use|already exists|conflict)"; then
-                  echo "⚠️ ${SECRET_NAME}已存在于Worker中但未被列表命令检测到，继续执行"
-                else
-                  # 最后再检查一次是否因为密钥已存在但未被正确检测
-                  set +e
-                  FINAL_CHECK=$(npx wrangler secret list 2>&1)
-                  set -e
+                echo "Secret put 输出:"
+                echo "$SECRET_PUT_OUTPUT" | grep -v "Please update to the latest version"
 
-                  if echo "$FINAL_CHECK" | grep -q "$SECRET_NAME"; then
-                    echo "虽然设置${SECRET_NAME}失败，但密钥似乎已存在于Worker中，继续执行"
+                if [ $SECRET_RESULT -ne 0 ]; then
+                  # 如果错误是由于密钥已存在导致的，视为成功
+                  if echo "$SECRET_PUT_OUTPUT" | grep -q -E "(already in use|already exists|conflict)"; then
+                    echo "⚠️ ${SECRET_NAME}已存在于Worker中但未被列表命令检测到，继续执行"
                   else
-                    echo "❌ 设置${SECRET_NAME}失败，且密钥确实不存在，退出部署"
-                    echo "详细错误信息: $SECRET_PUT_OUTPUT"
-                    exit 1
+                    # 最后再检查一次是否因为密钥已存在但未被正确检测
+                    set +e
+                    FINAL_CHECK=$(npx wrangler secret list 2>&1)
+                    set -e
+
+                    if echo "$FINAL_CHECK" | grep -q "$SECRET_NAME"; then
+                      echo "虽然设置${SECRET_NAME}失败，但密钥似乎已存在于Worker中，继续执行"
+                    else
+                      echo "❌ 设置${SECRET_NAME}失败，且密钥确实不存在，退出部署"
+                      echo "详细错误信息: $SECRET_PUT_OUTPUT"
+                      exit 1
+                    fi
                   fi
+                else
+                  echo "✅ ${SECRET_NAME} 已成功创建(作为secret变量)"
                 fi
-              else
-                echo "✅ ${SECRET_NAME} 已成功创建(作为secret变量)"
+              else 
+                echo "!!! 未找到GitHub中配置的${SECRET_NAME}值，忽略"
               fi
-            fi
-            echo ""  # 空行分隔不同密钥的处理日志
           done
           
       - name: Deploy to Cloudflare Workers

@@ -28,7 +28,7 @@ fn replace_host(content: &mut String, src: &str, dest: &str) -> Result<String> {
         .replace(&format!("//{}", src), &format!("//{}/{}", dest, src)));
 }
 
-pub async fn image_handler(req: Request, query: Option<HashMap<String, String>>, forward_host: Option<&String>) -> Result<Response> {
+pub async fn image_handler(req: Request, query: Option<HashMap<String, String>>) -> Result<Response> {
     let req_url = req.url()?;
     let domain = query.map_or(REGISTRY, |q|{
         match q.get("ns").map(|s| s.as_str()) {
@@ -110,9 +110,8 @@ pub async fn handler(mut req: Request, uri: Url, dst_host: &str) -> Result<Respo
                     value
                 }         
             }
-            (401, "www-authenticate") => {
-                value.replace("https://", &format!("https://{}/", my_host))
-            }
+            (401, "www-authenticate") => value.replace("https://", &format!("https://{}/", my_host)),
+            (_, "set-cookie") => value.replace(dst_host, &my_host),
             _ => value,
         };
         resp_header.set(&key, &new_value)?;
@@ -134,6 +133,7 @@ pub async fn handler(mut req: Request, uri: Url, dst_host: &str) -> Result<Respo
         },
         _ => {}
     }
+    
     let resp = match response.stream() {
         Err(_) => Response::builder()
             .with_status(status)

@@ -15,10 +15,11 @@ use sha2::{Sha224, Digest};
 use tokio::{sync::OnceCell};
 
 
-// static PROXY_DOMAIN_TRIE: OnceCell<DomainTrie> = OnceCell::const_new();
+#[allow(dead_code)]
 static PROXY_DOMAINS: OnceCell<RadixSet> = OnceCell::const_new();
 
 // address array, which support forward by host header.
+#[allow(dead_code)]
 static FORWARD_HOST: OnceCell<Option<String>> = OnceCell::const_new();
 
 // one hop header, which should remove when forward.
@@ -35,22 +36,14 @@ static DOH_HOST: OnceCell<String> = OnceCell::const_new();
 static COOKIE_HOST_KEY: &str = "tul_host";
 
 #[derive(Debug, Clone)]
-pub enum Address {
+pub enum Address<T: AsRef<str>> {
     Ipv4(Ipv4Addr),
-    Ipv6(Ipv6Addr),
-    Domain(String),
+    Domain(T),
 }
 
-impl Into<String> for Address {
-    fn into(self) -> String {
-        match self {
-            Address::Ipv4(ip) => ip.to_string(),
-            Address::Ipv6(ip) => ip.to_string(),
-            Address::Domain(domain) => domain,
-        }
-    }
-}
 
+// when destinatin use CF 5s or check referer, also could not be access too.
+#[allow(dead_code)]
 async fn get_proxy_domains(cx: &RouteContext<()>) -> RadixSet {
     let mut set = RadixSet::new();
     let _ = cx.env
@@ -65,6 +58,9 @@ async fn get_proxy_domains(cx: &RouteContext<()>) -> RadixSet {
     set
 }
 
+// forward host must be domain, and forbid ip.
+// http only support 80, https only support 443
+#[allow(dead_code)]
 async fn get_forward_host(cx: &RouteContext<()>) -> Option<String> {
     cx.env
         .secret("FORWARD_HOST")
@@ -72,7 +68,7 @@ async fn get_forward_host(cx: &RouteContext<()>) -> Option<String> {
             let s = x.to_string();
             let mut parts = s.trim().split(":");
             parts.next().map_or(None, |host| {
-                let port = parts.next().map_or(8080, |p| p.parse::<u16>().unwrap_or(8080));
+                let port = parts.next().map_or(80, |p| p.parse::<u16>().unwrap_or(80));
                 
                 Socket::builder()
                     .connect(host, port)
@@ -176,26 +172,11 @@ fn parse_path(url: &str) -> (Option<&str>, Option<&str>, Option<&str>) {
 }
 
 
-// deprecated.
-fn parse_cookies(cookie_str: &str) -> HashMap<String, String> {
-    cookie_str
-        .split(';')
-        .filter_map(|cookie| {
-            let parts: Vec<&str> = cookie.trim().splitn(2, '=').collect();
-            if parts.len() == 2 {
-                Some((parts[0].to_string(), parts[1].to_string()))
-            } else {
-                None
-            }
-        })
-        .collect()
-}
-
 fn get_cookie_by_name(cookie_str: &str, key: &str) -> Option<String> {
     cookie_str
         .split(';')
         .filter_map(|cookie| {
-            let mut parts = cookie.splitn(2, '=');
+            let mut parts = cookie.trim().splitn(2, '=');
             let cookie_key = parts.next()?;
             let cookie_value = parts.next()?;
             Some((cookie_key, cookie_value))
@@ -211,12 +192,6 @@ pub async fn handler(req: Request, cx: RouteContext<()>) -> Result<Response> {
     let dns_host = DOH_HOST.get_or_init(|| async {
         get_doh_host(&cx).await
     }).await;
-    let forward_host = FORWARD_HOST.get_or_init(|| async {
-        get_forward_host(&cx).await
-    }).await;
-    let domains_trie = PROXY_DOMAINS.get_or_init(|| async {
-        get_proxy_domains(&cx).await
-    }).await;
     
     let query = req
         .query()
@@ -226,7 +201,7 @@ pub async fn handler(req: Request, cx: RouteContext<()>) -> Result<Response> {
     match origin_path.as_str() {
         "/dns-query" => dns::resolve_handler(req, dns_host, query).await,
         path if path.starts_with(tj_path.as_str()) => tj(req, cx).await,
-        path if path.starts_with("/v2") => api::image_handler(req, query, forward_host.as_ref()).await,
+        path if path.starts_with("/v2") => api::image_handler(req, query).await,
         _ => {
             let cookie_host = req.headers().get("cookie")?
                 .map_or(None,|cookie| get_cookie_by_name(&cookie, COOKIE_HOST_KEY)
@@ -235,13 +210,13 @@ pub async fn handler(req: Request, cx: RouteContext<()>) -> Result<Response> {
             let (mut domain, port, mut path) = parse_path(&origin_path);
             // when not resolve, will try find domain by cookie.
             let mut notresolve= true;
-            // when only domain, will trye update cookie in response.
+            // when only domain, will update cookie in response.
             let mut onlydomain = false;
-            let mut request_scheme = "https";
+            let scheme = "https";
             
             match domain {
                 Some(d) if d.contains('.') => {
-                    match dns::is_cf_address(&Address::Domain(d.to_string()), dns_host).await {
+                    match dns::is_cf_address(&Address::Domain(d)).await {
                         Ok(_) => {
                             notresolve = false;
                             if path.is_none() || path.as_ref().unwrap().len()<2 {
@@ -259,33 +234,20 @@ pub async fn handler(req: Request, cx: RouteContext<()>) -> Result<Response> {
                     domain = Some(host.as_ref());  
                     path = Some(origin_path.as_str());
                 }
-                (true, None) => {
-                    return Response::error("Not Found", 404);
-                }
+                (true, None) => return Response::error("Not Found", 404),
                 (false, _) => {},
             }
 
-            let domain = domain.unwrap();
-            let mut host = domain.to_string();
-
-            if forward_host.is_some() {
-                let rev = domain.chars().rev().collect::<String>();
-                let idx =  domains_trie.longest_common_prefix_len(&rev);
-                if idx == rev.len() || rev.chars().nth(idx) == Some('.') {
-                    // only support http forward by Host header.
-                    request_scheme = "http";
-                    host = forward_host.as_ref().unwrap().clone(); 
-                }
-            }
+            let host = domain.unwrap();
             
-            console_debug!("finally scheme: {:?}, host: {:?}, domain: {:?}, port: {:?}, path: {:?}, query: {:?}", 
-                request_scheme, host, domain, port, path, query);
+            console_debug!("finally scheme: {:?}, host: {:?}, port: {:?}, path: {:?}, query: {:?}", 
+                scheme, host, port, path, query);
 
             let mut url = match (port, path) {
-                (Some(p), Some(path)) => format!("{}://{}:{}{}", request_scheme, host, p, path),
-                (Some(p), None) => format!("{}://{}:{}", request_scheme, host, p),
-                (None, Some(path)) => format!("{}://{}{}", request_scheme, host, path),
-                (None, None) => format!("{}://{}", request_scheme, host),
+                (Some(p), Some(path)) => format!("{}://{}:{}{}", scheme, host, p, path),
+                (Some(p), None) => format!("{}://{}:{}", scheme, host, p),
+                (None, Some(path)) => format!("{}://{}{}", scheme, host, path),
+                (None, None) => format!("{}://{}", scheme, host),
             };
             if let Some(v) = query {
                 url.push('?');
@@ -295,13 +257,13 @@ pub async fn handler(req: Request, cx: RouteContext<()>) -> Result<Response> {
                     .join("&")
                     .as_str());
             }
-            let mut resp = api::handler(req,  Url::parse(&url)?, domain).await?;
+            let mut resp = api::handler(req,  Url::parse(&url)?, host).await?;
             match resp.headers().get("content-type")? {
                 Some(s) if s.contains("text/html") => {
                     if onlydomain {
-                        console_debug!("set cookie domain: {:?}", domain);
+                        console_debug!("set cookie domain: {:?}", host);
                         let _ = resp.headers_mut()
-                            .set("set-cookie", format!("{}={}; Path=/; Max-Age=3600", COOKIE_HOST_KEY, domain).as_str());
+                            .set("set-cookie", format!("{}={}; Path=/; Max-Age=3600", COOKIE_HOST_KEY, host).as_str());
                     }
                 }
                 _ => {}
@@ -314,10 +276,6 @@ pub async fn handler(req: Request, cx: RouteContext<()>) -> Result<Response> {
 pub async fn tj(_req: Request, cx: RouteContext<()>) -> Result<Response> {
     let expected_hash = TJ_PASSWORD.get_or_init(|| async {
         get_trojan_password(&cx).await
-    }).await;
-
-    let dns_host = DOH_HOST.get_or_init(|| async {
-        get_doh_host(&cx).await
     }).await;
     
     let WebSocketPair { server, client } = WebSocketPair::new()?;
@@ -334,7 +292,7 @@ pub async fn tj(_req: Request, cx: RouteContext<()>) -> Result<Response> {
 
         let result = match tj::parse(expected_hash,&mut wsstream).await {
             Ok((hostname, port)) => {
-                let addr = match dns::is_cf_address(&hostname, dns_host).await {
+                let addr = match dns::is_cf_address(&hostname).await {
                     Ok((true,_)) => {
                         console_debug!("DNS query success, behind cloudflare for {:?}", &hostname);
                         //server.close(Some(1000u16), Some("use DoH then connect directly")).ok();
@@ -346,14 +304,14 @@ pub async fn tj(_req: Request, cx: RouteContext<()>) -> Result<Response> {
                         None
                     }
                 };
-                let hostname = match addr {
+                let host = match addr {
                     Some(ip) => ip.to_string(),
                     None => {
                         let _ = server.close(Some(1000u16), Some("Normal closure"));
                         return;
                     },
                 };
-                match Socket::builder().connect(hostname, port) {
+                match Socket::builder().connect(host, port) {
                     Ok(mut upstream) => {
                         match tokio::io::copy_bidirectional(wsstream.as_mut(),&mut upstream).await {
                             Ok(_) => Ok(()),
