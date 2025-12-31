@@ -1,10 +1,10 @@
 
 
 use tokio::io::{AsyncRead, AsyncReadExt};
-use std::net::{Ipv4Addr, Ipv6Addr};
+use std::net::{Ipv4Addr};
 use std::vec::Vec;
 
-pub async fn parse<R: AsyncRead + Unpin>(pw_hash: &Vec<u8>, stream: &mut R) -> std::io::Result<(super::Address, u16)> {
+pub async fn parse<R: AsyncRead + Unpin>(pw_hash: &Vec<u8>, stream: &mut R) -> std::io::Result<(super::Address<String>, u16)> {
 
     let mut password_hash = [0u8; 56];
     stream.read_exact(&mut password_hash).await?;
@@ -37,7 +37,6 @@ pub async fn parse<R: AsyncRead + Unpin>(pw_hash: &Vec<u8>, stream: &mut R) -> s
     // Get address size and address object
     let host = match atype {
         1 => super::Address::Ipv4(Ipv4Addr::from(stream.read_u32().await?)),
-        4 => super::Address::Ipv6(Ipv6Addr::from(stream.read_u128().await?)),
         3 => {
             // Read domain name size
             let size = stream.read_u8().await? as usize;

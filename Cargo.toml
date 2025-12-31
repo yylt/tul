@@ -23,6 +23,7 @@ getrandom = { version = "0.3", features = ["wasm_js"] }
 sha2 = "0.10.9"
 pin-project-lite = "0.2.16"
 
+fast_radix_trie = "1.1.0"
 prefix-trie = "0.8.1"
 ipnet = "2.11.0"
 serde = { version = "1.0.195", features = ["derive"] }
