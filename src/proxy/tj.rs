@@ -8,7 +8,7 @@ pub async fn parse<R: AsyncRead + Unpin>(pw_hash: &Vec<u8>, stream: &mut R) -> s
 
     let mut password_hash = [0u8; 56];
     stream.read_exact(&mut password_hash).await?;
-    if &password_hash != pw_hash.as_slice() {
+    if password_hash != pw_hash.as_slice() {
         return Err(std::io::Error::new(
             std::io::ErrorKind::InvalidData,
             format!("Invalid hash, expected: {:?}, got: {:?}", 

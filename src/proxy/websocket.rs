@@ -83,21 +83,20 @@ impl<'a> AsyncRead for WsStream<'a> {
                                 *this.is_closed = true;
                             }
                         }
-                        return Poll::Ready(Ok(()));
+                        Poll::Ready(Ok(()))
                     }
                     Some(Err(e))=>{
-                        Poll::Ready(Err(std::io::Error::new(
-                            std::io::ErrorKind::Other,
+                        Poll::Ready(Err(std::io::Error::other(
                             format!("WebSocket error: {}", e),
-                        ))) 
+                        )))
                     }
                     None=>{
                         *this.is_closed = true;
-                        return Poll::Ready(Ok(()));
+                        Poll::Ready(Ok(()))
                     }
                 }
             }
-            Poll::Pending => return Poll::Pending,
+            Poll::Pending => Poll::Pending,
         }
     }   
 }
@@ -126,8 +125,7 @@ impl<'a> AsyncWrite for WsStream<'a>  {
                 this.write_buffer.clear();
                 Poll::Ready(Ok(()))
             }
-            Err(e) => Poll::Ready(Err(std::io::Error::new(
-                std::io::ErrorKind::Other,
+            Err(e) => Poll::Ready(Err(std::io::Error::other(
                 format!("WebSocket send error: {}", e),
             ))),
         }
@@ -138,9 +136,8 @@ impl<'a> AsyncWrite for WsStream<'a>  {
 
         match this.ws.as_ref().close() {
             Ok(()) => Poll::Ready(Ok(())),
-            Err(_e) => Poll::Ready(Err(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                format!("WebSocket write close failed"),
+            Err(_e) => Poll::Ready(Err(std::io::Error::other(
+                "WebSocket write close failed",
             ))),
         }
     }

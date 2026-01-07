@@ -88,11 +88,11 @@ pub async fn is_cf_address<T: AsRef<str>>(addr: &super::Address<T>) -> Result<(b
         get_cf_trie().await
     }).await;
     let v4fn = |ip: &Ipv4Addr| -> Result<(bool, Ipv4Addr)> {
-        let ipnet = Ipv4Net::new(ip.clone(), 32).or_else(|e|{
+        let ipnet = Ipv4Net::new(*ip, 32).map_err(|e|{
             console_error!("parse ipv4 failed: {}", e);
-            Err(worker::Error::RustError(e.to_string()))
+            worker::Error::RustError(e.to_string())
         })?;
-        return Ok((trie.get_lpm(&ipnet).is_some(), ip.clone()));
+        Ok((trie.get_lpm(&ipnet).is_some(), *ip))
     };
     // TODO: only 1.1.1.1 support RFC 8484 and JSON API
     let resolve = "1.1.1.1";
@@ -121,9 +121,9 @@ pub async fn is_cf_address<T: AsRef<str>>(addr: &super::Address<T>) -> Result<(b
             if let Some(records) = dns_record.answer {
                 for answer in records {
                     if answer.rtype == 1 {  
-                        let ip = answer.data.parse::<Ipv4Addr>().or_else(|e| {
+                        let ip = answer.data.parse::<Ipv4Addr>().map_err(|e| {
                             console_error!("parse ipv4 failed: {}", e);
-                            Err(worker::Error::RustError(e.to_string()))
+                            worker::Error::RustError(e.to_string())
                         })?;
                         return v4fn(&ip);
                     }

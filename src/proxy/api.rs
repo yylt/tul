@@ -7,12 +7,12 @@ use regex::Regex;
 static REGISTRY: &str = "registry-1.docker.io";
 
 
-fn replace_host(content: &mut String, src: &str, dest: &str) -> Result<String> {
+fn replace_host(content: &mut str, src: &str, dest: &str) -> Result<String> {
 
     let re = Regex::new(r#"(?P<attr>src|href)(?P<eq>=)(?P<quote>['"]?)(?P<url>(//|https://))"#)
         .map_err(|_e| worker::Error::BadEncoding)?;
     
-    let result = re.replace_all(&content, |caps: &regex::Captures| {
+    let result = re.replace_all(content, |caps: &regex::Captures| {
         let attr = &caps["attr"];
         let eq = &caps["eq"];
         let quote = &caps["quote"];
@@ -24,8 +24,8 @@ fn replace_host(content: &mut String, src: &str, dest: &str) -> Result<String> {
             caps[0].to_string()
         }
     });
-    return Ok(result.into_owned()
-        .replace(&format!("//{}", src), &format!("//{}/{}", dest, src)));
+    Ok(result.into_owned()
+        .replace(&format!("//{}", src), &format!("//{}/{}", dest, src)))
 }
 
 pub async fn image_handler(req: Request, query: Option<HashMap<String, String>>) -> Result<Response> {
@@ -42,9 +42,10 @@ pub async fn image_handler(req: Request, query: Option<HashMap<String, String>>)
 
     let full_url = format!("https://{}{}", domain, req_url.path());
     if let Ok(url) = Url::parse(&full_url) {
-        return handler(req,  url, domain).await;
+        handler(req,  url, domain).await
+    } else {
+        Response::error( "Not Found",404)
     }
-    return Response::error( "Not Found",404);
 }
 
 pub async fn handler(mut req: Request, uri: Url, dst_host: &str) -> Result<Response> {
@@ -79,7 +80,7 @@ pub async fn handler(mut req: Request, uri: Url, dst_host: &str) -> Result<Respo
             req_init.body = Some(wasm_bindgen::JsValue::from(body));
         }
     }
-    let new_req = Request::new_with_init(&uri.to_string(), &req_init)?;
+    let new_req = Request::new_with_init(uri.as_ref(), &req_init)?;
 
     // send request
     let mut response = Fetch::Request(new_req).send().await?;
@@ -98,7 +99,7 @@ pub async fn handler(mut req: Request, uri: Url, dst_host: &str) -> Result<Respo
                     format!("/{}{}", uri.host().unwrap(), value)
                 } else if value.starts_with("https://") {
                     if let Ok(url) = Url::parse(&value) {
-                        if url.host_str().map_or(false, |host| host.contains("cloudflarestorage")) {
+                        if url.host_str().is_some_and(|host| host.contains("cloudflarestorage")) {
                             value
                         } else {
                             value.replace("https://", &format!("https://{}/", my_host))
@@ -118,20 +119,17 @@ pub async fn handler(mut req: Request, uri: Url, dst_host: &str) -> Result<Respo
     }
     let _ = resp_header.delete("content-security-policy");
     let _ = resp_header.set("access-control-allow-origin", "*");
-    match resp_header.get("content-type")? {
-        Some(s) => {
-            if s.contains("text/html")  {
-                let mut body = response.text().await?;
-                let newbody = replace_host(&mut body, dst_host, &my_host)?;
-                let _ = resp_header.delete("content-encoding");
-                let resp = Response::builder()
-                    .with_headers(resp_header)
-                    .with_status(status)
-                    .body(ResponseBody::Body(newbody.into_bytes()));
-                return Ok(resp);
-            }
-        },
-        _ => {}
+    if let Some(s) = resp_header.get("content-type")? {
+        if s.contains("text/html")  {
+            let mut body = response.text().await?;
+            let newbody = replace_host(&mut body, dst_host, &my_host)?;
+            let _ = resp_header.delete("content-encoding");
+            let resp = Response::builder()
+                .with_headers(resp_header)
+                .with_status(status)
+                .body(ResponseBody::Body(newbody.into_bytes()));
+            return Ok(resp);
+        }
     }
     
     let resp = match response.stream() {
@@ -145,6 +143,6 @@ pub async fn handler(mut req: Request, uri: Url, dst_host: &str) -> Result<Respo
             .from_stream(stream)?,
     };
 
-    return Ok(resp);
+    Ok(resp)
 } 
 
