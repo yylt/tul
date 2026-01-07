@@ -9,7 +9,7 @@ use std::collections::{
     HashMap,
     HashSet,
 };
-use std::net::{Ipv4Addr, Ipv6Addr};
+use std::net::Ipv4Addr;
 use fast_radix_trie::RadixSet;
 use sha2::{Sha224, Digest};
 use tokio::{sync::OnceCell};
@@ -46,15 +46,13 @@ pub enum Address<T: AsRef<str>> {
 #[allow(dead_code)]
 async fn get_proxy_domains(cx: &RouteContext<()>) -> RadixSet {
     let mut set = RadixSet::new();
-    let _ = cx.env
-        .secret("PROXY_DOMAINS")
-        .map_or((), |x| {
-            x.to_string().split(",")
+    if let Ok(x) = cx.env.secret("PROXY_DOMAINS") {
+        x.to_string().split(",")
             .map(|s| s.trim().to_string())
             .filter(|s| !s.is_empty())
             .map(|s| s.chars().rev().collect::<String>())
             .for_each(|s| {set.insert(s.into_bytes());});
-    });
+    }
     set
 }
 
@@ -64,15 +62,17 @@ async fn get_proxy_domains(cx: &RouteContext<()>) -> RadixSet {
 async fn get_forward_host(cx: &RouteContext<()>) -> Option<String> {
     cx.env
         .secret("FORWARD_HOST")
-        .map_or(None, |x| {
+        .ok()
+        .and_then(|x| {
             let s = x.to_string();
-            let mut parts = s.trim().split(":");
-            parts.next().map_or(None, |host| {
+            let mut parts = s.trim().split(':');
+            parts.next().and_then(|host| {
                 let port = parts.next().map_or(80, |p| p.parse::<u16>().unwrap_or(80));
-                
+
                 Socket::builder()
                     .connect(host, port)
-                    .map_or(None, |_| Some(x.to_string()))
+                    .ok()
+                    .map(|_| x.to_string())
             })
         })
 }
@@ -144,7 +144,7 @@ fn parse_path(url: &str) -> (Option<&str>, Option<&str>, Option<&str>) {
     
     let rest = &url[1..];
     
-    let domain_end = rest.find(|c| c == ':' || c == '/').unwrap_or(rest.len());
+    let domain_end = rest.find([':', '/']).unwrap_or(rest.len());
     let domain = &rest[..domain_end];
     
     if domain.is_empty() {
@@ -157,14 +157,13 @@ fn parse_path(url: &str) -> (Option<&str>, Option<&str>, Option<&str>) {
         return (Some(domain), None, None);
     }
     
-    if remaining.starts_with(':') {
-        if let Some(path_start) = remaining[1..].find('/') {
-            let port_end = 1 + path_start;  // 明确类型
-            let port = &remaining[1..port_end];
-            let path = &remaining[port_end..];
+    if let Some(stripped) = remaining.strip_prefix(':') {
+        if let Some(path_start) = stripped.find('/') {
+            let port = &stripped[..path_start];
+            let path = &stripped[path_start..];
             (Some(domain), Some(port), Some(path))
         } else {
-            (Some(domain), Some(&remaining[1..]), None)
+            (Some(domain), Some(stripped), None)
         }
     } else {
         (Some(domain), None, Some(remaining))
@@ -176,9 +175,7 @@ fn get_cookie_by_name(cookie_str: &str, key: &str) -> Option<String> {
     cookie_str
         .split(';')
         .filter_map(|cookie| {
-            let mut parts = cookie.trim().splitn(2, '=');
-            let cookie_key = parts.next()?;
-            let cookie_value = parts.next()?;
+            let (cookie_key, cookie_value) = cookie.trim().split_once('=')?;
             Some((cookie_key, cookie_value))
         })
         .find(|(k, _)| *k == key)
@@ -204,8 +201,7 @@ pub async fn handler(req: Request, cx: RouteContext<()>) -> Result<Response> {
         path if path.starts_with("/v2") => api::image_handler(req, query).await,
         _ => {
             let cookie_host = req.headers().get("cookie")?
-                .map_or(None,|cookie| get_cookie_by_name(&cookie, COOKIE_HOST_KEY)
-            );
+                .and_then(|cookie| get_cookie_by_name(&cookie, COOKIE_HOST_KEY));
 
             let (mut domain, port, mut path) = parse_path(&origin_path);
             // when not resolve, will try find domain by cookie.
@@ -216,14 +212,11 @@ pub async fn handler(req: Request, cx: RouteContext<()>) -> Result<Response> {
             
             match domain {
                 Some(d) if d.contains('.') => {
-                    match dns::is_cf_address(&Address::Domain(d)).await {
-                        Ok(_) => {
-                            notresolve = false;
-                            if path.is_none() || path.as_ref().unwrap().len()<2 {
-                                onlydomain = true;
-                            }
-                        },
-                        _ => {},
+                    if (dns::is_cf_address(&Address::Domain(d)).await).is_ok() {
+                        notresolve = false;
+                        if path.is_none() || path.as_ref().unwrap().len()<2 {
+                            onlydomain = true;
+                        }
                     }
                 },
                 _ => {},
