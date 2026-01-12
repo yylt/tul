@@ -204,31 +204,21 @@ pub async fn handler(req: Request, cx: RouteContext<()>) -> Result<Response> {
                 .and_then(|cookie| get_cookie_by_name(&cookie, COOKIE_HOST_KEY));
 
             let (mut domain, port, mut path) = parse_path(&origin_path);
-            // when not resolve, will try find domain by cookie.
-            let mut notresolve= true;
-            // when only domain, will update cookie in response.
-            let mut onlydomain = false;
             let scheme = "https";
-            
-            match domain {
-                Some(d) if d.contains('.') => {
-                    if (dns::is_cf_address(&Address::Domain(d)).await).is_ok() {
-                        notresolve = false;
-                        if path.is_none() || path.as_ref().unwrap().len()<2 {
-                            onlydomain = true;
-                        }
-                    }
-                },
-                _ => {},
-            }
 
-            match (notresolve, &cookie_host) {
-                (true, Some(host)) => {
+            // when not resolve, will try find domain by cookie.
+            let resolve = match domain {
+                Some(d) => d.contains('.') && dns::is_cf_address(&Address::Domain(d)).await.is_ok(),
+                _ => false,
+            };
+
+            match (resolve, &cookie_host) {
+                (false, Some(host)) => {
                     domain = Some(host.as_ref());  
                     path = Some(origin_path.as_str());
                 }
-                (true, None) => return Response::error("Not Found", 404),
-                (false, _) => {},
+                (false, None) => return Response::error("Not Found", 404),
+                (true, _) => {},
             }
 
             let host = domain.unwrap();
@@ -250,18 +240,7 @@ pub async fn handler(req: Request, cx: RouteContext<()>) -> Result<Response> {
                     .join("&")
                     .as_str());
             }
-            let mut resp = api::handler(req,  Url::parse(&url)?, host).await?;
-            match resp.headers().get("content-type")? {
-                Some(s) if s.contains("text/html") => {
-                    if onlydomain {
-                        console_debug!("set cookie domain: {:?}", host);
-                        let _ = resp.headers_mut()
-                            .set("set-cookie", format!("{}={}; Path=/; Max-Age=3600", COOKIE_HOST_KEY, host).as_str());
-                    }
-                }
-                _ => {}
-            }
-            Ok(resp)    
+            api::handler(req,  Url::parse(&url)?, host).await   
         }
     }   
 }
