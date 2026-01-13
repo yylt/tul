@@ -6,7 +6,6 @@ use regex::Regex;
 
 static REGISTRY: &str = "registry-1.docker.io";
 
-
 fn replace_host(content: &mut str, src: &str, dest: &str) -> Result<String> {
 
     let re = Regex::new(r#"(?P<attr>src|href)(?P<eq>=)(?P<quote>['"]?)(?P<url>(//|https://))"#)
@@ -112,7 +111,6 @@ pub async fn handler(mut req: Request, uri: Url, dst_host: &str) -> Result<Respo
                 }         
             }
             (401, "www-authenticate") => value.replace("https://", &format!("https://{}/", my_host)),
-            (_, "set-cookie") => value.replace(dst_host, &my_host),
             _ => value,
         };
         resp_header.set(&key, &new_value)?;
@@ -121,9 +119,10 @@ pub async fn handler(mut req: Request, uri: Url, dst_host: &str) -> Result<Respo
     let _ = resp_header.set("access-control-allow-origin", "*");
     if let Some(s) = resp_header.get("content-type")? {
         if s.contains("text/html")  {
+            let _ = resp_header.delete("content-encoding");
+            let _ = resp_header.set("set-cookie", format!("{}={}; Path=/; Max-Age=3600", COOKIE_HOST_KEY, dst_host).as_str());
             let mut body = response.text().await?;
             let newbody = replace_host(&mut body, dst_host, &my_host)?;
-            let _ = resp_header.delete("content-encoding");
             let resp = Response::builder()
                 .with_headers(resp_header)
                 .with_status(status)
