@@ -15,7 +15,7 @@ crate-type = ["cdylib"]
 worker = { version = "0.7.2", features = ["http"] }
 worker-macros = { version = "0.7.2" }
 futures = "0.3.31"
-wasm-bindgen-futures = "0.4.56"
+wasm-bindgen-futures = "0.4.58"
 
 tokio = { version = "1.49.0", features = ["io-util", "sync"], default-features = false }
 regex = "1.12.2"
