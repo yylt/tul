@@ -72,6 +72,7 @@ pub async fn handler(mut req: Request, uri: Url, dst_host: &str) -> Result<Respo
         body: None,
         cf: CfProperties::default(),
         redirect: RequestRedirect::Manual,
+        cache: Some(CacheMode::NoCache), // CacheMode::Default,
     };
     // request body
     if let Ok(body) = req.bytes().await {

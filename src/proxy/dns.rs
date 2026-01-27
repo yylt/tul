@@ -109,6 +109,7 @@ pub async fn is_cf_address<T: AsRef<str>>(addr: &super::Address<T>) -> Result<(b
                 body: None,
                 cf: CfProperties::default(),
                 redirect: RequestRedirect::Follow,
+                cache: Some(CacheMode::NoCache),
             };
             let req = Request::new_with_init("https://lo/dns-query", &req_init)?;
             let mut map = HashMap::new();
@@ -154,6 +155,7 @@ pub async fn resolve_handler<T: AsRef<str>>(mut req: Request, host: T, query: Op
         body: None,
         cf: CfProperties::default(),
         redirect: RequestRedirect::Follow,
+        cache: Some(CacheMode::NoCache), // CacheMode::Default,
     };
     // body if exist
     if let Ok(body) = req.bytes().await {
