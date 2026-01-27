@@ -3,4 +3,15 @@ updates:
   - package-ecosystem: "cargo"
     directory: "/" # Location of your Cargo.toml and Cargo.lock files
     schedule:
-      interval: "weekly" # How often Dependabot checks for updates
+      interval: "weekly"
+  # Enable version updates for GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    assignees:
+      - "yylt"
+    commit-message:
+      prefix: "ci"
+      include: "scope"
