@@ -211,7 +211,7 @@ pub async fn handler(req: Request, cx: RouteContext<()>) -> Result<Response> {
                 Some(d) => d.contains('.') && dns::is_cf_address(&Address::Domain(d)).await.is_ok(),
                 _ => false,
             };
-
+            console_debug!("domain: {:?}, path: {:?}, resolved: {:?}", domain, path, resolve);
             match (resolve, &cookie_host) {
                 (false, Some(host)) => {
                     domain = Some(host.as_ref());  

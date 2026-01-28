@@ -102,6 +102,7 @@ pub async fn is_cf_address<T: AsRef<str>>(addr: &super::Address<T>) -> Result<(b
             let header = Headers::new();
             header.set("accept", "application/dns-json")?;
             header.set("user-agent", "tul/0.1")?;
+            console_debug!("DNS query: {:?}", domain.as_ref());
 
             let req_init = RequestInit {
                 method: Method::Get,
@@ -109,7 +110,7 @@ pub async fn is_cf_address<T: AsRef<str>>(addr: &super::Address<T>) -> Result<(b
                 body: None,
                 cf: CfProperties::default(),
                 redirect: RequestRedirect::Follow,
-                cache: Some(CacheMode::NoCache),
+                cache: None, // CacheMode::Default,
             };
             let req = Request::new_with_init("https://lo/dns-query", &req_init)?;
             let mut map = HashMap::new();
@@ -155,7 +156,7 @@ pub async fn resolve_handler<T: AsRef<str>>(mut req: Request, host: T, query: Op
         body: None,
         cf: CfProperties::default(),
         redirect: RequestRedirect::Follow,
-        cache: Some(CacheMode::NoCache), // CacheMode::Default,
+        cache: None, // CacheMode::Default,
     };
     // body if exist
     if let Ok(body) = req.bytes().await {
