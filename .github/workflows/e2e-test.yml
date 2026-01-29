@@ -1,0 +1,177 @@
+name: E2E Integration Tests
+
+on:
+  pull_request:
+    branches: [ main ]
+    
+jobs:
+  e2e-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+
+      - name: Install Rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+
+      - name: Cache Cargo dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Install worker-build
+        run: |
+          if ! command -v worker-build &> /dev/null; then
+            cargo install worker-build
+          else
+            echo "worker-build already installed"
+          fi
+
+      - name: Install wrangler
+        run: npm install -g wrangler
+
+      - name: Build worker (dev mode)
+        run: |
+          echo "Building worker in development mode..."
+          worker-build --dev
+          echo "Build completed successfully"
+
+      - name: Verify build artifacts
+        run: |
+          echo "Checking build artifacts..."
+          ls -lh build/worker/
+          if [ ! -f "build/worker/shim.mjs" ]; then
+            echo "Error: shim.mjs not found"
+            exit 1
+          fi
+          echo "Build artifacts verified"
+
+      - name: Start wrangler dev server
+        run: |
+          echo "Starting wrangler dev server..."
+
+          # Install net-tools for netstat
+          sudo apt-get update -qq
+          sudo apt-get install -y net-tools
+
+          # Start wrangler dev in background using the dev config
+          nohup wrangler dev --config .wrangler.dev.toml --port 8787 --local --ip 127.0.0.1 > wrangler.log 2>&1 &
+          WRANGLER_PID=$!
+          echo $WRANGLER_PID > wrangler.pid
+          echo "Wrangler dev started with PID: $WRANGLER_PID"
+
+          # Give it more time to start and show logs
+          echo "Waiting for wrangler to start (20 seconds)..."
+          sleep 20
+
+          # Show current logs
+          echo "=========================================="
+          echo "Current wrangler logs:"
+          echo "=========================================="
+          cat wrangler.log || echo "No logs yet"
+          echo "=========================================="
+
+          # Check if process is still running
+          if ps -p $WRANGLER_PID > /dev/null; then
+            echo "✓ Wrangler dev process is running"
+          else
+            echo "✗ ERROR: Wrangler dev process died"
+            cat wrangler.log
+            exit 1
+          fi
+
+          # Check if port is listening
+          echo "Checking if port 8787 is listening..."
+          if netstat -tuln | grep -q ":8787 "; then
+            echo "✓ Port 8787 is listening"
+          else
+            echo "⚠ WARNING: Port 8787 is not listening yet"
+            echo "All listening ports:"
+            netstat -tuln | grep LISTEN || echo "No listening ports found"
+          fi
+
+          # Try a simple curl test
+          echo "Testing worker connectivity..."
+          if curl -s -m 5 http://localhost:8787/dns-query?name=test.com 2>&1 | head -c 100; then
+            echo ""
+            echo "✓ Worker responded to test request"
+          else
+            echo ""
+            echo "⚠ Worker did not respond to test request (may still be starting)"
+          fi
+
+      - name: Display wrangler startup logs
+        if: always()
+        run: |
+          echo "=========================================="
+          echo "Wrangler Startup Logs"
+          echo "=========================================="
+          if [ -f wrangler.log ]; then
+            cat wrangler.log
+          else
+            echo "No wrangler.log file found"
+          fi
+
+      - name: Run E2E tests
+        env:
+          WORKER_URL: http://localhost:8787
+        run: |
+          echo "=========================================="
+          echo "Running E2E Integration Tests"
+          echo "=========================================="
+          chmod +x integration/e2e-test.sh
+          ./integration/e2e-test.sh
+
+      - name: Display wrangler runtime logs
+        if: always()
+        run: |
+          echo "=========================================="
+          echo "Wrangler Runtime Logs"
+          echo "=========================================="
+          if [ -f wrangler.log ]; then
+            cat wrangler.log
+          else
+            echo "No wrangler.log file found"
+          fi
+
+      - name: Stop wrangler dev server
+        if: always()
+        run: |
+          if [ -f wrangler.pid ]; then
+            WRANGLER_PID=$(cat wrangler.pid)
+            echo "Stopping wrangler dev (PID: $WRANGLER_PID)..."
+            kill $WRANGLER_PID || true
+            # Wait a bit for graceful shutdown
+            sleep 2
+            # Force kill if still running
+            kill -9 $WRANGLER_PID 2>/dev/null || true
+            rm wrangler.pid
+            echo "Wrangler dev stopped"
+          else
+            echo "No wrangler.pid file found"
+          fi
+
+      - name: Test Summary
+        if: always()
+        run: |
+          echo "=========================================="
+          echo "E2E Test Execution Complete"
+          echo "=========================================="
+          if [ "${{ job.status }}" == "success" ]; then
+            echo "✅ All tests passed successfully!"
+          else
+            echo "❌ Some tests failed. Check logs above for details."
+          fi
