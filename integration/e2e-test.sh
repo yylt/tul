@@ -143,9 +143,10 @@ main() {
         failed_tests=$((failed_tests + 1))
     fi
 
-    if ! test_doh; then
-        failed_tests=$((failed_tests + 1))
-    fi
+    # not support json response
+    # if ! test_doh; then
+    #     failed_tests=$((failed_tests + 1))
+    # fi
 
     # Summary
     echo ""

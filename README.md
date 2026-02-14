@@ -77,11 +77,13 @@ docker pull {worker-domain}/library/ubuntu:latest
 代理 DNS 查询请求，如访问 cloudflare 代理网站可直连，如 linux.do, v2ex.com 等
 ```bash
 
-# 测试请求
-curl -s "https://1.1.1.1/dns-query?name=v2ex.com&type=A" -H "accept: application/dns-json" 
+# 测试请求（debian+ 安装 knot-dnsutils）
+kdig @1.1.1.1 +https v2ex.com HTTPS
+kdig @doh.pub +https v2ex.com HTTPS
+kdig @dns.google +https v2ex.com HTTPS
 
 # 通过代理测试请求
-curl -s "https://{worker-domain}/dns-query?name=v2ex.com&type=A" -H "accept: application/dns-json" 
+kdig @{worker-domain} +https v2ex.com HTTPS
 ```
 
 配置浏览器使用 DoH 代理，参考[这里](https://help.aliyun.com/document_detail/2868691.html)

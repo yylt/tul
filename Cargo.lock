@@ -786,6 +786,7 @@ dependencies = [
  "futures",
  "getrandom",
  "ipnet",
+ "js-sys",
  "pin-project-lite",
  "prefix-trie",
  "regex",
