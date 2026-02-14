@@ -1,11 +1,9 @@
-
-
-use pin_project_lite::pin_project;
-use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
-use worker::*;
 use futures::StreamExt;
+use pin_project_lite::pin_project;
 use std::pin::Pin;
 use std::task::{Context, Poll};
+use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
+use worker::*;
 
 static BUFSIZE: usize = 4096;
 
@@ -16,14 +14,14 @@ pin_project! {
         read_buffer: Vec<u8>,
         write_buffer: Vec<u8>,
         is_closed: bool,
-    }   
+    }
 }
 
 impl<'a> WsStream<'a> {
     pub fn new(ws: &'a WebSocket, events: EventStream<'a>, early_data: Option<Vec<u8>>) -> Self {
-        let mut s  = Self { 
-            ws, 
-            events ,
+        let mut s = Self {
+            ws,
+            events,
             read_buffer: Vec::with_capacity(BUFSIZE),
             write_buffer: Vec::with_capacity(BUFSIZE),
             is_closed: false,
@@ -53,7 +51,6 @@ impl<'a> AsyncRead for WsStream<'a> {
         cx: &mut Context<'_>,
         buf: &mut ReadBuf<'_>,
     ) -> Poll<tokio::io::Result<()>> {
-
         let this = self.project();
 
         if !this.read_buffer.is_empty() {
@@ -63,51 +60,47 @@ impl<'a> AsyncRead for WsStream<'a> {
             return Poll::Ready(Ok(()));
         }
         if *this.is_closed {
-            return Poll::Ready(Ok(())); 
+            return Poll::Ready(Ok(()));
         }
         match this.events.poll_next_unpin(cx) {
-            Poll::Ready(msgoption)=>{
-                match msgoption{
-                    Some(Ok(message))=>{
-                        match message {
-                            worker::WebsocketEvent::Message(msg) => {
-                                let data = msg.bytes().unwrap();
-                                let to_copy = std::cmp::min( data.len(), buf.remaining());
-                                buf.put_slice(&data[..to_copy]);
-                                                        
-                                if data.len() > to_copy {
-                                    this.read_buffer.extend_from_slice(&data[to_copy..]);
-                                }
-                            }
-                            worker::WebsocketEvent::Close(_) => {
-                                *this.is_closed = true;
+            Poll::Ready(msgoption) => match msgoption {
+                Some(Ok(message)) => {
+                    match message {
+                        worker::WebsocketEvent::Message(msg) => {
+                            let data = msg.bytes().unwrap();
+                            let to_copy = std::cmp::min(data.len(), buf.remaining());
+                            buf.put_slice(&data[..to_copy]);
+
+                            if data.len() > to_copy {
+                                this.read_buffer.extend_from_slice(&data[to_copy..]);
                             }
                         }
-                        Poll::Ready(Ok(()))
+                        worker::WebsocketEvent::Close(_) => {
+                            *this.is_closed = true;
+                        }
                     }
-                    Some(Err(e))=>{
-                        Poll::Ready(Err(std::io::Error::other(
-                            format!("WebSocket error: {}", e),
-                        )))
-                    }
-                    None=>{
-                        *this.is_closed = true;
-                        Poll::Ready(Ok(()))
-                    }
+                    Poll::Ready(Ok(()))
                 }
-            }
+                Some(Err(e)) => Poll::Ready(Err(std::io::Error::other(format!(
+                    "WebSocket error: {}",
+                    e
+                )))),
+                None => {
+                    *this.is_closed = true;
+                    Poll::Ready(Ok(()))
+                }
+            },
             Poll::Pending => Poll::Pending,
         }
-    }   
+    }
 }
 
-impl<'a> AsyncWrite for WsStream<'a>  {
+impl<'a> AsyncWrite for WsStream<'a> {
     fn poll_write(
         self: Pin<&mut Self>,
         _: &mut Context<'_>,
         buf: &[u8],
     ) -> Poll<tokio::io::Result<usize>> {
-
         let this = self.project();
         this.write_buffer.extend_from_slice(buf);
         Poll::Ready(Ok(buf.len()))
@@ -115,19 +108,20 @@ impl<'a> AsyncWrite for WsStream<'a>  {
 
     fn poll_flush(self: Pin<&mut Self>, _: &mut Context<'_>) -> Poll<tokio::io::Result<()>> {
         let this = self.project();
-        
+
         if this.write_buffer.is_empty() {
             return Poll::Ready(Ok(()));
         }
-        
+
         match this.ws.send_with_bytes(&this.write_buffer) {
             Ok(()) => {
                 this.write_buffer.clear();
                 Poll::Ready(Ok(()))
             }
-            Err(e) => Poll::Ready(Err(std::io::Error::other(
-                format!("WebSocket send error: {}", e),
-            ))),
+            Err(e) => Poll::Ready(Err(std::io::Error::other(format!(
+                "WebSocket send error: {}",
+                e
+            )))),
         }
     }
 
@@ -136,9 +130,7 @@ impl<'a> AsyncWrite for WsStream<'a>  {
 
         match this.ws.as_ref().close() {
             Ok(()) => Poll::Ready(Ok(())),
-            Err(_e) => Poll::Ready(Err(std::io::Error::other(
-                "WebSocket write close failed",
-            ))),
+            Err(_e) => Poll::Ready(Err(std::io::Error::other("WebSocket write close failed"))),
         }
     }
 }
