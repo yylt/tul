@@ -46,6 +46,7 @@ $ v2ray -c ./hack/config.json
 
 ```
 # 例子
+https://{worker-domain}/https://github.com/yylt/tul/archive/refs/tags/v0.2.7.zip
 https://{worker-domain}/github.com/yylt/tul/archive/refs/heads/main.zip
 https://{worker-domain}/zh.wikipedia.org
 https://{worker-domain}/duckduckgo.com

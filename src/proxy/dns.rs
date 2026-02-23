@@ -34,7 +34,10 @@ async fn get_cf_trie() -> PrefixSet<Ipv4Net> {
     pm
 }
 
-pub async fn is_cf_address<T: AsRef<str>, K: AsRef<str>>(resolve: K, addr: &super::Address<T>) -> Result<(bool, Ipv4Addr)> {
+pub async fn is_cf_address<T: AsRef<str>, K: AsRef<str>>(
+    resolve: K,
+    addr: &super::Address<T>,
+) -> Result<(bool, Ipv4Addr)> {
     let trie = CF_TRIE.get_or_init(|| async { get_cf_trie().await }).await;
     let v4fn = |ip: &Ipv4Addr| -> Result<(bool, Ipv4Addr)> {
         let ipnet = Ipv4Net::new(*ip, 32).map_err(|e| {
