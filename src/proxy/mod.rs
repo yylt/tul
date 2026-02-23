@@ -131,37 +131,51 @@ async fn get_doh_host(cx: &RouteContext<()>) -> String {
         .map_or("dns.google".to_string(), |x| x.to_string())
 }
 
-// parse path：{domain}:{port}{path}
-fn parse_path(url: &str) -> (Option<&str>, Option<&str>, Option<&str>) {
+// parse path：[{scheme}://]{domain}:{port}{path}
+fn parse_path(url: &str) -> (&str, Option<&str>, Option<&str>, Option<&str>) {
     if !url.starts_with('/') || url.len() == 1 {
-        return (None, None, None);
+        return ("https", None, None, None);
     }
 
-    let rest = &url[1..];
+    let mut scheme = "https";
+    let mut rest = &url[1..];
+    if let Some(idx) = rest.find("://") {
+        // ensure scheme part is non-empty and alphabetic to avoid false positives
+        let scheme_candidate = &rest[..idx];
+        if !scheme_candidate.is_empty() && scheme_candidate.chars().all(|c| c.is_ascii_alphabetic())
+        {
+            let trimmed = &rest[idx + 3..];
+            if trimmed.is_empty() {
+                return (scheme_candidate, None, None, None);
+            }
+            rest = trimmed;
+            scheme = scheme_candidate;
+        }
+    }
 
     let domain_end = rest.find([':', '/']).unwrap_or(rest.len());
     let domain = &rest[..domain_end];
 
     if domain.is_empty() {
-        return (None, None, None);
+        return (scheme, None, None, None);
     }
 
     let remaining = &rest[domain_end..];
 
     if remaining.is_empty() {
-        return (Some(domain), None, None);
+        return (scheme, Some(domain), None, None);
     }
 
     if let Some(stripped) = remaining.strip_prefix(':') {
         if let Some(path_start) = stripped.find('/') {
             let port = &stripped[..path_start];
             let path = &stripped[path_start..];
-            (Some(domain), Some(port), Some(path))
+            (scheme, Some(domain), Some(port), Some(path))
         } else {
-            (Some(domain), Some(stripped), None)
+            (scheme, Some(domain), Some(stripped), None)
         }
     } else {
-        (Some(domain), None, Some(remaining))
+        (scheme, Some(domain), None, Some(remaining))
     }
 }
 
@@ -199,12 +213,16 @@ pub async fn handler(req: Request, cx: RouteContext<()>) -> Result<Response> {
                 .get("cookie")?
                 .and_then(|cookie| get_cookie_by_name(&cookie, COOKIE_HOST_KEY));
 
-            let (mut domain, port, mut path) = parse_path(&origin_path);
-            let scheme = "https";
+            let (scheme, mut domain, port, mut path) = parse_path(&origin_path);
 
             // when not resolve, will try find domain by cookie.
             let resolve = match domain {
-                Some(d) => d.contains('.') && dns::is_cf_address(dns_host, &Address::Domain(d)).await.is_ok(),
+                Some(d) => {
+                    d.contains('.')
+                        && dns::is_cf_address(dns_host, &Address::Domain(d))
+                            .await
+                            .is_ok()
+                }
                 _ => false,
             };
             console_debug!(
@@ -327,23 +345,74 @@ pub async fn tj(_req: Request, cx: RouteContext<()>) -> Result<Response> {
 #[test]
 fn test_parse_path() {
     let test_cases = [
-        "/a:100/b/c",
-        "/example.com",
-        "/example.com:8080",
-        "/example.com/path",
-        "/example.com:8080/path/to/resource",
-        "/a/b/c",
-        "/",
-        "invalid",
-        "/github.githubassets.com/assets/wp-runt", // 边界情况
+        ("/a:100/b/c", "https", Some("a"), Some("100"), Some("/b/c")),
+        ("/example.com", "https", Some("example.com"), None, None),
+        (
+            "/example.com:8080",
+            "https",
+            Some("example.com"),
+            Some("8080"),
+            None,
+        ),
+        (
+            "/example.com/path",
+            "https",
+            Some("example.com"),
+            None,
+            Some("/path"),
+        ),
+        (
+            "/example.com:8080/path/to/resource",
+            "https",
+            Some("example.com"),
+            Some("8080"),
+            Some("/path/to/resource"),
+        ),
+        (
+            "/https://example.com:8443/api",
+            "https",
+            Some("example.com"),
+            Some("8443"),
+            Some("/api"),
+        ),
+        (
+            "/http://example.com/resource",
+            "http",
+            Some("example.com"),
+            None,
+            Some("/resource"),
+        ),
+        (
+            "/https://example.com",
+            "https",
+            Some("example.com"),
+            None,
+            None,
+        ),
+        ("/a/b/c", "https", Some("a"), None, Some("/b/c")),
+        ("/", "https", None, None, None),
+        ("invalid", "https", None, None, None),
+        (
+            "/github.githubassets.com/assets/wp-runt",
+            "https",
+            Some("github.githubassets.com"),
+            None,
+            Some("/assets/wp-runt"),
+        ),
     ];
 
-    eprintln!("Testing fixed version:");
-    for case in test_cases {
-        let (domain, port, path) = parse_path(case);
-        eprintln!(
-            "{:20} -> domain: {:10?} port: {:6?} path: {:?}",
-            case, domain, port, path
+    for (input, expected_scheme, expected_domain, expected_port, expected_path) in test_cases {
+        let (scheme, domain, port, path) = parse_path(input);
+        assert_eq!(
+            (scheme, domain, port, path),
+            (
+                expected_scheme,
+                expected_domain,
+                expected_port,
+                expected_path
+            ),
+            "parse_path failed for input {}",
+            input
         );
     }
 }
