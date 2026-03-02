@@ -13,16 +13,16 @@ crate-type = ["cdylib"]
 
 [dependencies]
 worker = { version = "0.7.5", features = ["http"] }
-worker-macros = { version = "0.7.4" }
+worker-macros = { version = "0.7.5" }
 futures = "0.3.32"
-wasm-bindgen-futures = "0.4.58"
-js-sys = "0.3.85"
+wasm-bindgen-futures = "0.4.64"
+js-sys = "0.3.91"
 
 tokio = { version = "1.49.0", features = ["io-util", "sync"], default-features = false }
 regex = "1.12.3"
 getrandom = { version = "0.4", features = ["wasm_js"] }
 sha2 = "0.10.9"
-pin-project-lite = "0.2.16"
+pin-project-lite = "0.2.17"
 
 fast_radix_trie = "1.1.0"
 prefix-trie = "0.8.1"
