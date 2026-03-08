@@ -14,6 +14,8 @@
 
 🔍 安全 DNS 解析 - 支持 DoH（DNS over HTTPS）协议，并对 CF 地址优选
 
+🎰 搜索模式 - 通过固定搜索后端反向代理搜索结果，支持 DuckDuckGo 和 startpage
+
 ## ⚠️ 注意 
 CF worker 读写超时时间 10s, 建议使用断点续传下载大文件。命令如下：
 
@@ -63,6 +65,23 @@ https://{worker-domain}/duckduckgo.com
 
 </details>
 
+### 搜索代理模式
+通过固定搜索后端反向代理搜索结果，不会跳转到上游站点。
+
+```bash
+# 默认使用 DuckDuckGo
+https://{worker-domain}/tul_search?q=rust
+
+# 显式指定 DuckDuckGo
+https://{worker-domain}/tul_search?q=rust&s=ddg
+
+# 指定 Startpage
+https://{worker-domain}/tul_search?q=rust&s=sp
+```
+
+- `q`：搜索关键词，必填；为空时返回 `400 Bad Request`
+- `s`：搜索后端，可选，支持 `ddg` / `duckduckgo` 和 `sp` / `startpage`
+- 未传 `s` 或传入未知值时，默认使用 `ddg`
 
 ### 镜像仓库模式
 代理 docker.io 拉取镜像请求
