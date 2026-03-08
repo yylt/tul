@@ -190,6 +190,44 @@ fn get_cookie_by_name(cookie_str: &str, key: &str) -> Option<String> {
         .map(|(_, v)| v.to_string())
 }
 
+fn build_search_url(query: &Option<HashMap<String, String>>) -> Result<(Url, &'static str)> {
+    let query = query.as_ref().ok_or(Error::RustError("missing query parameter: q".into()))?;
+    let q = query
+        .get("q")
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty())
+        .ok_or(Error::RustError("missing query parameter: q".into()))?;
+
+    let backend = query.get("s").map(|s| s.as_str()).unwrap_or("ddg");
+    let (host, mut url) = match backend {
+        "sp" | "startpage" => (
+            "startpage.com",
+            Url::parse("https://startpage.com/sp/search")?,
+        ),
+        _ => (
+            "duckduckgo.com",
+            Url::parse("https://duckduckgo.com/")?,
+        ),
+    };
+
+    {
+        let mut pairs = url.query_pairs_mut();
+        pairs.append_pair("q", q);
+        match host {
+            "startpage.com" => {
+                pairs.append_pair("cat", "web");
+                pairs.append_pair("pl", "opensearch");
+            }
+            _ => {
+                pairs.append_pair("ia", "web");
+                pairs.append_pair("rpl", "1");
+            }
+        }
+    }
+
+    Ok((url, host))
+}
+
 pub async fn handler(req: Request, cx: RouteContext<()>) -> Result<Response> {
     let tj_path = TJ_PATH
         .get_or_init(|| async { get_trojan_path(&cx).await })
@@ -207,6 +245,10 @@ pub async fn handler(req: Request, cx: RouteContext<()>) -> Result<Response> {
         "/dns-query" => dns::resolve_handler(req, dns_host, query).await,
         path if path.starts_with(tj_path.as_str()) => tj(req, cx).await,
         path if path.starts_with("/v2") => api::image_handler(req, query).await,
+        "/tul_search" => {
+            let (url, host) = build_search_url(&query)?;
+            api::handler(req, url, host).await
+        }
         _ => {
             let cookie_host = req
                 .headers()
@@ -418,4 +460,15 @@ fn test_parse_path() {
 }
 
 #[test]
-fn test_proxy_domains() {}
+fn test_build_search_url_requires_q() {
+    let err = build_search_url(&Some(HashMap::new())).unwrap_err();
+    assert!(err.to_string().contains("missing query parameter: q"));
+}
+
+#[test]
+fn test_build_search_url_rejects_empty_q() {
+    let query = HashMap::from([(String::from("q"), String::from("   "))]);
+    let err = build_search_url(&Some(query)).unwrap_err();
+    assert!(err.to_string().contains("missing query parameter: q"));
+}
+
