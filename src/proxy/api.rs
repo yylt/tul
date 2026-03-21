@@ -40,13 +40,18 @@ pub async fn image_handler(
 
     let full_url = format!("https://{}{}", domain, req_url.path());
     if let Ok(url) = Url::parse(&full_url) {
-        handler(req, url, domain).await
+        handler(req, url, domain, None).await
     } else {
         Response::error("Not Found", 404)
     }
 }
 
-pub async fn handler(mut req: Request, uri: Url, dst_host: &str) -> Result<Response> {
+pub async fn handler(
+    mut req: Request,
+    uri: Url,
+    dst_host: &str,
+    query: Option<HashMap<String, String>>,
+) -> Result<Response> {
     let hops = HOP_HEADERS
         .get_or_init(|| async { get_hop_headers().await })
         .await;
@@ -128,7 +133,16 @@ pub async fn handler(mut req: Request, uri: Url, dst_host: &str) -> Result<Respo
                 format!("{}={}; Path=/; Max-Age=3600", COOKIE_HOST_KEY, dst_host).as_str(),
             );
             let mut body = response.text().await?;
-            let newbody = replace_host(&mut body, dst_host, &my_host)?;
+            let should_replace = query
+                .as_ref()
+                .and_then(|map| map.get("tul_rh"))
+                .map(|value| value == "n")
+                .unwrap_or(true);
+            let newbody = if should_replace {
+                replace_host(&mut body, dst_host, &my_host)?
+            } else {
+                body
+            };
             let resp = Response::builder()
                 .with_headers(resp_header)
                 .with_status(status)
