@@ -191,40 +191,24 @@ fn get_cookie_by_name(cookie_str: &str, key: &str) -> Option<String> {
 }
 
 fn build_search_url(query: &Option<HashMap<String, String>>) -> Result<(Url, &'static str)> {
-    let query = query.as_ref().ok_or(Error::RustError("missing query parameter: q".into()))?;
-    let q = query
-        .get("q")
-        .map(|s| s.trim())
-        .filter(|s| !s.is_empty())
+    let query = query
+        .as_ref()
         .ok_or(Error::RustError("missing query parameter: q".into()))?;
-
+    let q = query.get("q").map(|s| s.trim());
     let backend = query.get("s").map(|s| s.as_str()).unwrap_or("ddg");
     let (host, mut url) = match backend {
-        "sp" | "startpage" => (
-            "startpage.com",
-            Url::parse("https://startpage.com/sp/search")?,
+        "sp" => (
+            "www.startpage.com",
+            Url::parse("https://www.startpage.com/sp/search")?,
         ),
-        _ => (
-            "duckduckgo.com",
-            Url::parse("https://duckduckgo.com/")?,
+        "bing" => (
+            "www.bing.com",
+            Url::parse("https://www.bing.com/search")?,
         ),
+        _ => ("duckduckgo.com", Url::parse("https://duckduckgo.com/")?),
     };
 
-    {
-        let mut pairs = url.query_pairs_mut();
-        pairs.append_pair("q", q);
-        match host {
-            "startpage.com" => {
-                pairs.append_pair("cat", "web");
-                pairs.append_pair("pl", "opensearch");
-            }
-            _ => {
-                pairs.append_pair("ia", "web");
-                pairs.append_pair("rpl", "1");
-            }
-        }
-    }
-
+    url.query_pairs_mut().append_pair("q", q.unwrap_or(""));
     Ok((url, host))
 }
 
@@ -247,7 +231,7 @@ pub async fn handler(req: Request, cx: RouteContext<()>) -> Result<Response> {
         path if path.starts_with("/v2") => api::image_handler(req, query).await,
         "/tul_search" => {
             let (url, host) = build_search_url(&query)?;
-            api::handler(req, url, host).await
+            api::handler(req, url, host, query).await
         }
         _ => {
             let cookie_host = req
@@ -267,12 +251,7 @@ pub async fn handler(req: Request, cx: RouteContext<()>) -> Result<Response> {
                 }
                 _ => false,
             };
-            console_debug!(
-                "domain: {:?}, path: {:?}, resolved: {:?}",
-                domain,
-                path,
-                resolve
-            );
+
             match (resolve, &cookie_host) {
                 (false, Some(host)) => {
                     domain = Some(host.as_ref());
@@ -299,7 +278,7 @@ pub async fn handler(req: Request, cx: RouteContext<()>) -> Result<Response> {
                 (None, Some(path)) => format!("{}://{}{}", scheme, host, path),
                 (None, None) => format!("{}://{}", scheme, host),
             };
-            if let Some(v) = query {
+            if let Some(v) = &query {
                 url.push('?');
                 url.push_str(
                     v.iter()
@@ -309,7 +288,7 @@ pub async fn handler(req: Request, cx: RouteContext<()>) -> Result<Response> {
                         .as_str(),
                 );
             }
-            api::handler(req, Url::parse(&url)?, host).await
+            api::handler(req, Url::parse(&url)?, host, query).await
         }
     }
 }
@@ -471,4 +450,3 @@ fn test_build_search_url_rejects_empty_q() {
     let err = build_search_url(&Some(query)).unwrap_err();
     assert!(err.to_string().contains("missing query parameter: q"));
 }
-
