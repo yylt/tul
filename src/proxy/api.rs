@@ -136,7 +136,7 @@ pub async fn handler(
             let should_replace = query
                 .as_ref()
                 .and_then(|map| map.get("tul_rh"))
-                .map(|value| value == "n")
+                .map(|value| value != "n")
                 .unwrap_or(true);
             let newbody = if should_replace {
                 replace_host(&mut body, dst_host, &my_host)?
