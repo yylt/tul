@@ -138,9 +138,9 @@ checksum = "877a4ace8713b0bcf2a4e7eec82529c029f1d0619886d18145fea96c3ffe5c0f"
 
 [[package]]
 name = "fast_radix_trie"
-version = "1.1.1"
+version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d29e7814fec4130ee6559f72e5ad6f268ffaaf220073c7f85782d919fabc9dad"
+checksum = "7701a4d392aaead14b674de1c69f43ce2432d903981d851f7034bc1b0ba63983"
 dependencies = [
  "memchr",
 ]
