@@ -9,6 +9,10 @@ updates:
         patterns:
           - "worker"
           - "worker-macros"
+      wasm-bindgen:
+        patterns:
+          - "wasm-bindgen-futures"
+          - "wasm-bindgen"
   # Enable version updates for GitHub Actions
   - package-ecosystem: "github-actions"
     directory: "/"
