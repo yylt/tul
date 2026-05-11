@@ -1,12 +1,18 @@
 use super::*;
 use js_sys::Uint8Array;
-use std::{collections::HashMap, net::Ipv4Addr};
+use std::net::Ipv4Addr;
 use tokio::sync::OnceCell;
+use wasm_bindgen::JsValue;
 
 use ipnet::Ipv4Net;
 use prefix_trie::set::PrefixSet;
 
+const DNS_HEADER_SIZE: usize = 12;
+const QTYPE_A: u16 = 1;
+const QCLASS_IN: u16 = 1;
+
 static CF_TRIE: OnceCell<PrefixSet<Ipv4Net>> = OnceCell::const_new();
+
 // ref: https://www.cloudflare.com/ips
 async fn get_cf_trie() -> PrefixSet<Ipv4Net> {
     // TODO fetch from cloudflare
@@ -34,208 +40,166 @@ async fn get_cf_trie() -> PrefixSet<Ipv4Net> {
     pm
 }
 
-pub async fn is_cf_address<T: AsRef<str>, K: AsRef<str>>(
-    resolve: K,
-    addr: &super::Address<T>,
-) -> Result<(bool, Ipv4Addr)> {
-    let trie = CF_TRIE.get_or_init(|| async { get_cf_trie().await }).await;
-    let v4fn = |ip: &Ipv4Addr| -> Result<(bool, Ipv4Addr)> {
-        let ipnet = Ipv4Net::new(*ip, 32).map_err(|e| {
-            console_error!("parse ipv4 failed: {}", e);
-            worker::Error::RustError(e.to_string())
-        })?;
-        Ok((trie.get_lpm(&ipnet).is_some(), *ip))
-    };
-    // TODO: only 1.1.1.1 support RFC 8484 and JSON API
-    //let resolve = "1.1.1.1";
-    match addr {
-        super::Address::Ipv4(ipv4) => v4fn(ipv4),
-        super::Address::Domain(domain) => {
-            let header = Headers::new();
-            header.set("accept", "application/dns-message")?;
-            header.set("content-type", "application/dns-message")?;
-            header.set("user-agent", "tul/0.1")?;
-
-            let body = build_dns_query(domain.as_ref())?;
-            let req_init = RequestInit {
-                method: Method::Post,
-                headers: header,
-                body: Some(Uint8Array::from(body.as_slice()).into()),
-                cf: CfProperties::default(),
-                redirect: RequestRedirect::Follow,
-                cache: None, // CacheMode::Default,
-            };
-            let req = Request::new_with_init("https://lo/dns-query", &req_init)?;
-
-            let mut resp = resolve_handler(req, resolve, None).await?;
-            let bytes = resp.bytes().await?;
-            let ipv4 = extract_ipv4_from_dns_response(&bytes)?;
-            v4fn(&ipv4)
-        }
-    }
-}
-
-fn build_dns_query(domain: &str) -> Result<Vec<u8>> {
+// DNS 报文构建
+fn build_dns_query(domain: &str, qtype: u16) -> Result<Vec<u8>> {
     if domain.is_empty() {
-        return Err(worker::Error::RustError(
-            "dns query domain empty".to_string(),
-        ));
+        return Err(Error::RustError("Empty domain name".into()));
     }
-    let mut buffer = Vec::with_capacity(12 + domain.len() + 6);
-    buffer.extend_from_slice(&0u16.to_be_bytes()); // ID
-    buffer.extend_from_slice(&0x0100u16.to_be_bytes()); // RD flag
-    buffer.extend_from_slice(&1u16.to_be_bytes()); // QDCOUNT
-    buffer.extend_from_slice(&0u16.to_be_bytes()); // ANCOUNT
-    buffer.extend_from_slice(&0u16.to_be_bytes()); // NSCOUNT
-    buffer.extend_from_slice(&0u16.to_be_bytes()); // ARCOUNT
+    // 预估容量: header(12) + domain labels + terminator(1) + qtype(2) + qclass(2)
+    let mut buf = Vec::with_capacity(12 + domain.len() + 6);
+    buf.extend_from_slice(&0u16.to_be_bytes()); // ID
+    buf.extend_from_slice(&0x0100u16.to_be_bytes()); // RD flag
+    buf.extend_from_slice(&1u16.to_be_bytes()); // QDCOUNT
+    buf.extend_from_slice(&0u16.to_be_bytes()); // ANCOUNT
+    buf.extend_from_slice(&0u16.to_be_bytes()); // NSCOUNT
+    buf.extend_from_slice(&0u16.to_be_bytes()); // ARCOUNT
 
     for label in domain.split('.') {
         if label.is_empty() || label.len() > 63 {
-            return Err(worker::Error::RustError("invalid dns label".to_string()));
+            return Err(Error::RustError("Invalid DNS label".into()));
         }
-        buffer.push(label.len() as u8);
-        buffer.extend_from_slice(label.as_bytes());
+        buf.push(label.len() as u8);
+        buf.extend_from_slice(label.as_bytes());
     }
-    buffer.push(0); // terminator
-    buffer.extend_from_slice(&1u16.to_be_bytes()); // QTYPE A
-    buffer.extend_from_slice(&1u16.to_be_bytes()); // QCLASS IN
+    buf.push(0); // name terminator
 
-    Ok(buffer)
+    buf.extend_from_slice(&qtype.to_be_bytes());
+    buf.extend_from_slice(&QCLASS_IN.to_be_bytes());
+    Ok(buf)
 }
 
-fn extract_ipv4_from_dns_response(bytes: &[u8]) -> Result<Ipv4Addr> {
-    if bytes.len() < 12 {
-        return Err(worker::Error::RustError(
-            "dns response too short".to_string(),
-        ));
-    }
-    let rcode = bytes[3] & 0x0f;
-    if rcode != 0 {
-        return Err(worker::Error::RustError(format!(
-            "dns error rcode {}",
-            rcode
-        )));
-    }
-    let mut offset = 12;
-    let qdcount = u16::from_be_bytes([bytes[4], bytes[5]]) as usize;
-    let ancount = u16::from_be_bytes([bytes[6], bytes[7]]) as usize;
-
-    for _ in 0..qdcount {
-        offset = skip_name(bytes, offset)?;
-        if offset + 4 > bytes.len() {
-            return Err(worker::Error::RustError(
-                "dns question truncated".to_string(),
-            ));
-        }
-        offset += 4; // type + class
-    }
-
-    for _ in 0..ancount {
-        offset = skip_name(bytes, offset)?;
-        if offset + 10 > bytes.len() {
-            return Err(worker::Error::RustError(
-                "dns answer header truncated".to_string(),
-            ));
-        }
-        let rtype = u16::from_be_bytes([bytes[offset], bytes[offset + 1]]);
-        let rclass = u16::from_be_bytes([bytes[offset + 2], bytes[offset + 3]]);
-        offset += 4; // type + class
-        offset += 4; // ttl
-        let rdlength = u16::from_be_bytes([bytes[offset], bytes[offset + 1]]) as usize;
-        offset += 2;
-        if offset + rdlength > bytes.len() {
-            return Err(worker::Error::RustError("dns answer truncated".to_string()));
-        }
-        if rtype == 1 && rclass == 1 && rdlength == 4 {
-            return Ok(Ipv4Addr::new(
-                bytes[offset],
-                bytes[offset + 1],
-                bytes[offset + 2],
-                bytes[offset + 3],
-            ));
-        }
-        offset += rdlength;
-    }
-
-    Err(worker::Error::RustError(
-        "dns a record not found".to_string(),
-    ))
-}
-
-fn skip_name(bytes: &[u8], mut offset: usize) -> Result<usize> {
-    loop {
-        if offset >= bytes.len() {
-            return Err(worker::Error::RustError(
-                "dns name out of range".to_string(),
-            ));
-        }
-        let len = bytes[offset];
-        if len & 0xc0 == 0xc0 {
-            if offset + 1 >= bytes.len() {
-                return Err(worker::Error::RustError(
-                    "dns pointer truncated".to_string(),
-                ));
+fn skip_name(bytes: &[u8], mut pos: usize) -> Result<usize> {
+    while pos < bytes.len() {
+        let label_len = bytes[pos];
+        if label_len & 0xC0 == 0xC0 {
+            if pos + 1 >= bytes.len() {
+                return Err(Error::RustError("Truncated pointer".into()));
             }
-            offset += 2;
+            pos += 2;
             break;
-        } else if len == 0 {
-            offset += 1;
+        } else if label_len == 0 {
+            pos += 1;
             break;
         } else {
-            let next = offset + 1 + len as usize;
-            if next > bytes.len() {
-                return Err(worker::Error::RustError("dns label truncated".to_string()));
-            }
-            offset = next;
+            pos += 1 + label_len as usize;
         }
     }
-    Ok(offset)
+    Ok(pos)
 }
 
-pub async fn resolve_handler<T: AsRef<str>>(
-    mut req: Request,
-    host: T,
-    query: Option<HashMap<String, String>>,
-) -> Result<Response> {
-    let hops = HOP_HEADERS
-        .get_or_init(|| async { get_hop_headers().await })
-        .await;
-    let req_headers = Headers::new();
-    for (key, value) in req.headers().entries() {
-        if hops.contains(&key) {
-            continue;
-        }
-        req_headers.set(&key, &value)?;
+fn extract_ipv4_from_response(bytes: &[u8]) -> Result<Ipv4Addr> {
+    if bytes.len() < DNS_HEADER_SIZE {
+        return Err(Error::RustError("Response too short".into()));
     }
-    req_headers.set("host", host.as_ref())?;
+    let rcode = bytes[3] & 0x0F;
+    if rcode != 0 {
+        return Err(Error::RustError(format!("DNS error rcode={}", rcode)));
+    }
+    let qdcount = u16::from_be_bytes([bytes[4], bytes[5]]) as usize;
+    let ancount = u16::from_be_bytes([bytes[6], bytes[7]]) as usize;
+    let mut pos = DNS_HEADER_SIZE;
 
-    let mut req_init = RequestInit {
-        method: req.method(),
-        headers: req_headers,
-        body: None,
+    // 跳过 question section
+    for _ in 0..qdcount {
+        pos = skip_name(bytes, pos)?;
+        if pos + 4 > bytes.len() {
+            return Err(Error::RustError("Question truncated".into()));
+        }
+        pos += 4; // QTYPE + QCLASS
+    }
+
+    // 查找 A 记录
+    for _ in 0..ancount {
+        pos = skip_name(bytes, pos)?;
+        if pos + 10 > bytes.len() {
+            return Err(Error::RustError("Answer header truncated".into()));
+        }
+        let rtype = u16::from_be_bytes([bytes[pos], bytes[pos + 1]]);
+        let rclass = u16::from_be_bytes([bytes[pos + 2], bytes[pos + 3]]);
+        pos += 4; // type + class
+        pos += 4; // TTL
+        let rdlength = u16::from_be_bytes([bytes[pos], bytes[pos + 1]]) as usize;
+        pos += 2;
+        if pos + rdlength > bytes.len() {
+            return Err(Error::RustError("Answer data truncated".into()));
+        }
+        if rtype == QTYPE_A && rclass == QCLASS_IN && rdlength == 4 {
+            return Ok(Ipv4Addr::new(
+                bytes[pos],
+                bytes[pos + 1],
+                bytes[pos + 2],
+                bytes[pos + 3],
+            ));
+        }
+        pos += rdlength;
+    }
+    Err(Error::RustError("A record not found".into()))
+}
+
+pub async fn doh_query(domain: &str, qtype: u16, resolver: &str) -> Result<Vec<u8>> {
+    let query = build_dns_query(domain, qtype)?;
+    let url = format!("https://{}/dns-query", resolver);
+    let headers = Headers::new();
+    headers.set("accept", "application/dns-message")?;
+    headers.set("content-type", "application/dns-message")?;
+    let req_init = RequestInit {
+        method: Method::Post,
+        headers,
+        body: Some(JsValue::from(Uint8Array::from(query.as_slice()))),
         cf: CfProperties::default(),
         redirect: RequestRedirect::Follow,
-        cache: None, // CacheMode::Default,
+        cache: None,
     };
-    // body if exist
-    if let Ok(body) = req.bytes().await {
-        if !body.is_empty() {
-            req_init.body = Some(wasm_bindgen::JsValue::from(body));
+    let req = Request::new_with_init(&url, &req_init)?;
+    Ok(Fetch::Request(req).send().await?.bytes().await?)
+}
+
+pub async fn resolve_a(domain: &str, resolver: &str) -> Result<Ipv4Addr> {
+    let resp_bytes = doh_query(domain, QTYPE_A, resolver).await?;
+    extract_ipv4_from_response(&resp_bytes)
+}
+
+pub async fn is_cf_address<T: AsRef<str>, K: AsRef<str>>(
+    resolve: K,
+    addr: &Address<T>,
+) -> Result<(bool, Ipv4Addr)> {
+    let trie = CF_TRIE.get_or_init(|| async { get_cf_trie().await }).await;
+    let v4fn = |ip: Ipv4Addr| -> Result<(bool, Ipv4Addr)> {
+        let ipnet =
+            Ipv4Net::new(ip, 32).map_err(|e| Error::RustError(format!("Invalid IPv4: {}", e)))?;
+        Ok((trie.get_lpm(&ipnet).is_some(), ip))
+    };
+
+    match addr {
+        Address::Ipv4(ip) => v4fn(*ip),
+        Address::Domain(domain) => {
+            let ip = resolve_a(domain.as_ref(), resolve.as_ref()).await?;
+            v4fn(ip)
         }
     }
-    let mut uri = format!("https://{}{}", host.as_ref(), req.path());
-    if let Some(v) = query {
-        uri.push('?');
-        uri.push_str(
-            v.iter()
-                .map(|(k, v)| format!("{}={}", k, v))
-                .collect::<Vec<_>>()
-                .join("&")
-                .as_str(),
-        );
+}
+
+pub async fn resolve_handler<T: AsRef<str>>(mut req: Request, host: T) -> Result<Response> {
+    if req.method() != Method::Post {
+        return Response::error("Method not allowed", 405);
     }
 
+    let headers = Headers::new();
+    headers.set("accept", "application/dns-message")?;
+    headers.set("content-type", "application/dns-message")?;
+
+    let body_bytes = req.bytes().await?.into();
+    let req_init = RequestInit {
+        method: req.method().clone(),
+        headers,
+        body: Some(body_bytes),
+        cf: CfProperties::default(),
+        redirect: RequestRedirect::Follow,
+        cache: None,
+    };
+
+    let uri = format!("https://{}{}", host.as_ref(), req.path());
     let new_req = Request::new_with_init(&uri, &req_init)?;
-    console_debug!("DNS Request: {:?}", new_req);
-    return Fetch::Request(new_req).send().await;
+    console_debug!("Forwarding request: {:?}", new_req);
+    Fetch::Request(new_req).send().await
 }

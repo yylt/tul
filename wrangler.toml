@@ -2,6 +2,18 @@ name = "tul"
 main = "build/worker/shim.mjs"
 compatibility_date = "2025-01-10"
 
+[triggers]
+crons = ["0 * * * *"]
+
+[vars]
+domains = "example.com,example.org"
+
+[[kv_namespaces]]
+binding = "TUL_KV"
+# 创建生产 KV namespace:
+# npx wrangler kv namespace create tul-kv
+# 将返回的 namespace id 填到下面的 id
+id = "your-production-kv-namespace-id"
+
 [build]
 command = "cargo install -q worker-build && worker-build --release"
-

@@ -2,5 +2,13 @@ name = "tul"
 main = "build/worker/shim.mjs"
 compatibility_date = "2025-01-10"
 
+[[kv_namespaces]]
+binding = "TUL_KV"
+# 本地测试用 KV namespace:
+# npx wrangler kv namespace create tul-kv --preview
+# 将返回的 preview namespace id 填到下面的 preview_id
+id = "your-production-kv-namespace-id"
+preview_id = "your-preview-kv-namespace-id"
+
 [build]
 command = "command -v worker-build &> /dev/null && worker-build --dev || cargo install -q worker-build && worker-build --dev"
