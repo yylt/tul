@@ -2,19 +2,14 @@ pub mod api;
 pub mod dns;
 pub mod tj;
 pub mod websocket;
-use fast_radix_trie::RadixSet;
+
 use sha2::{Digest, Sha224};
 use std::collections::{HashMap, HashSet};
 use std::net::Ipv4Addr;
 use tokio::sync::OnceCell;
 use worker::*;
 
-#[allow(dead_code)]
-static PROXY_DOMAINS: OnceCell<RadixSet> = OnceCell::const_new();
-
-// address array, which support forward by host header.
-#[allow(dead_code)]
-static FORWARD_HOST: OnceCell<Option<String>> = OnceCell::const_new();
+static ECH_DOMAIN: OnceCell<String> = OnceCell::const_new();
 
 // one hop header, which should remove when forward.
 static HOP_HEADERS: OnceCell<HashSet<String>> = OnceCell::const_new();
@@ -35,39 +30,10 @@ pub enum Address<T: AsRef<str>> {
     Domain(T),
 }
 
-// when destinatin use CF 5s or check referer, also could not be access too.
-#[allow(dead_code)]
-async fn get_proxy_domains(cx: &RouteContext<()>) -> RadixSet {
-    let mut set = RadixSet::new();
-    if let Ok(x) = cx.env.secret("PROXY_DOMAINS") {
-        x.to_string()
-            .split(",")
-            .map(|s| s.trim().to_string())
-            .filter(|s| !s.is_empty())
-            .map(|s| s.chars().rev().collect::<String>())
-            .for_each(|s| {
-                set.insert(s.into_bytes());
-            });
-    }
-    set
-}
-
-// forward host must be domain, and forbid ip.
-// http only support 80, https only support 443
-#[allow(dead_code)]
-async fn get_forward_host(cx: &RouteContext<()>) -> Option<String> {
-    cx.env.secret("FORWARD_HOST").ok().and_then(|x| {
-        let s = x.to_string();
-        let mut parts = s.trim().split(':');
-        parts.next().and_then(|host| {
-            let port = parts.next().map_or(80, |p| p.parse::<u16>().unwrap_or(80));
-
-            Socket::builder()
-                .connect(host, port)
-                .ok()
-                .map(|_| x.to_string())
-        })
-    })
+async fn get_ech_domain(cx: &RouteContext<()>) -> String {
+    cx.env
+        .var("ECH_DOMAIN")
+        .map_or("linux.do".to_string(), |x| x.to_string())
 }
 
 async fn get_hop_headers() -> HashSet<String> {
@@ -215,7 +181,9 @@ pub async fn handler(req: Request, cx: RouteContext<()>) -> Result<Response> {
     let dns_host = DOH_HOST
         .get_or_init(|| async { get_doh_host(&cx).await })
         .await;
-
+    let ech_domain: &String = ECH_DOMAIN
+        .get_or_init(|| async { get_ech_domain(&cx).await })
+        .await;
     let query = req
         .query()
         .map_or(None, |q: HashMap<String, String>| Some(q));
@@ -224,7 +192,7 @@ pub async fn handler(req: Request, cx: RouteContext<()>) -> Result<Response> {
     match origin_path.as_str() {
         "/dns-query" => {
             let mut resp = dns::resolve_handler(req, dns_host, query).await?;
-            let bytes = dns::process_response(&resp.bytes().await?, dns_host, "linux.do").await?;
+            let bytes = dns::process_response(&resp.bytes().await?, dns_host, ech_domain).await?;
             let new_resp = Response::builder()
                 .with_headers(resp.headers().clone())
                 .with_status(200)

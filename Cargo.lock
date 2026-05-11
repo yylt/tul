@@ -170,15 +170,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "877a4ace8713b0bcf2a4e7eec82529c029f1d0619886d18145fea96c3ffe5c0f"
 
 [[package]]
-name = "fast_radix_trie"
-version = "1.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7701a4d392aaead14b674de1c69f43ce2432d903981d851f7034bc1b0ba63983"
-dependencies = [
- "memchr",
-]
-
-[[package]]
 name = "foldhash"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -327,14 +318,12 @@ dependencies = [
  "idna",
  "ipnet",
  "jni",
- "js-sys",
  "once_cell",
  "rand",
  "thiserror",
  "tinyvec",
  "tracing",
  "url",
- "wasm-bindgen",
 ]
 
 [[package]]
@@ -1016,7 +1005,6 @@ checksum = "db97caf9d906fbde555dd62fa95ddba9eecfd14cb388e4f491a66d74cd5fb79a"
 name = "tul"
 version = "0.1.0"
 dependencies = [
- "fast_radix_trie",
  "futures",
  "getrandom",
  "hickory-proto",

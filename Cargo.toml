@@ -18,17 +18,16 @@ futures = "0.3.32"
 wasm-bindgen-futures = "0.4.71"
 wasm-bindgen = "0.2.121"
 js-sys = "0.3.91"
-hickory-proto = { version = "0.26.1", features = ["wasm-bindgen"], default-features = false }
+hickory-proto = { version = "0.26.1", default-features = false }
 tokio = { version = "1.52.2", features = ["io-util", "sync"], default-features = false }
 regex = "1.12.3"
-getrandom = { version = "0.4", features = ["wasm_js"] }
+getrandom = { version = "0.4", features = ["wasm_js"], default-features = false }
 sha2 = "0.11.0"
 pin-project-lite = "0.2.17"
 
-fast_radix_trie = "1.2.0"
 prefix-trie = "0.8.3"
 ipnet = "2.12.0"
-serde = { version = "1.0.195", features = ["derive"] }
+serde = { version = "1.0.195", features = ["derive"], default-features = false }
 
 [profile.release]
 opt-level = "z"
