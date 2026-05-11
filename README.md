@@ -6,13 +6,13 @@
 
 ## ✨ 特性
 
-🔒 Trojan 代理 - 基于 WebSocket 的 Trojan 协议，后端基于 IP 分流，CF 目标地址会 block
+🔒 Trojan 代理 - 基于 WebSocket 的 Trojan 协议代理，注意属于 Cloudflare IP 范围地址会 block，因
 
-🌐 通用网站镜像 - 支持绝大多数网址的镜像，如遇访问失败网站，建议通过代理访问
+🌐 通用网站镜像 - 支持绝大多数网址的镜像，访问失败时建议通过代理方式
 
-🐳 镜像仓库支持 - 默认从 Docker Hub 拉取，并支持任意容器镜像仓库
+🐳 容器镜像仓库支持 - 默认从 Docker Hub 拉取容器镜像，同时支持任意容器镜像仓库
 
-🔍 安全 DNS 解析 - 支持 DoH（DNS over HTTPS）协议，并对 CF 地址优选
+🔍 安全 DNS 解析 - 支持 DoH（DNS over HTTPS/H3）协议，并对 CF 地址优选
 
 🎰 搜索模式 - 通过固定搜索后端反向代理搜索结果，支持 DuckDuckGo 和 startpage
 
@@ -95,6 +95,9 @@ docker pull {worker-domain}/library/ubuntu:latest
 
 ### DoH(安全 DNS 解析) 模式
 代理 DNS 查询请求，如访问 cloudflare 代理网站可直连，如 linux.do, v2ex.com 等
+
+当使用 DoH 解析时，若目标地址属于 Cloudflare IP 范围且响应缺少 ECH 配置，系统会自动替换为支持 ECH 的 Cloudflare 域名，确保所有请求均启用 ECH 并优选最佳地址。
+
 ```bash
 
 # 测试请求（debian+ 安装 knot-dnsutils）
@@ -104,6 +107,7 @@ kdig @dns.google +https v2ex.com HTTPS
 
 # 通过代理测试请求
 kdig @{worker-domain} +https v2ex.com HTTPS
+RRTYPE=HTTPS dnslookup v2ex.com h3://{worker-domain}/dns-query
 ```
 
 配置浏览器使用 DoH 代理，参考[这里](https://help.aliyun.com/document_detail/2868691.html)

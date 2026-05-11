@@ -201,10 +201,6 @@ fn build_search_url(query: &Option<HashMap<String, String>>) -> Result<(Url, &'s
             "www.startpage.com",
             Url::parse("https://www.startpage.com/sp/search")?,
         ),
-        "bing" => (
-            "www.bing.com",
-            Url::parse("https://www.bing.com/search")?,
-        ),
         _ => ("duckduckgo.com", Url::parse("https://duckduckgo.com/")?),
     };
 
@@ -226,7 +222,16 @@ pub async fn handler(req: Request, cx: RouteContext<()>) -> Result<Response> {
     let origin_path = req.path();
 
     match origin_path.as_str() {
-        "/dns-query" => dns::resolve_handler(req, dns_host, query).await,
+        "/dns-query" => {
+            let mut resp = dns::resolve_handler(req, dns_host, query).await?;
+            let bytes = dns::process_response(&resp.bytes().await?, dns_host, "linux.do").await?;
+            let new_resp = Response::builder()
+                .with_headers(resp.headers().clone())
+                .with_status(200)
+                .body(ResponseBody::Body(bytes));
+            Ok(new_resp)
+        }
+
         path if path.starts_with(tj_path.as_str()) => tj(req, cx).await,
         path if path.starts_with("/v2") => api::image_handler(req, query).await,
         "/tul_search" => {
