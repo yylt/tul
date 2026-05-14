@@ -18,6 +18,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5f0e0fee31ef5ed1ba1316088939cea399010ed7731dba877ed44aeb407a75ea"
 
 [[package]]
+name = "array-const-fn-init"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8bcb85e548c05d407fa6faff46b750ba287714ef32afc0f5e15b4641ffd6affb"
+
+[[package]]
 name = "async-trait"
 version = "0.1.89"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -652,10 +658,11 @@ dependencies = [
 
 [[package]]
 name = "prefix-trie"
-version = "0.8.3"
+version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "90f561214012d3fc240a1f9c817cc4d57f5310910d066069c1b093f766bb5966"
+checksum = "213da6195cb7a0de6d6a39ff149104be782141b670b5c0f81111245eab51d81d"
 dependencies = [
+ "array-const-fn-init",
  "either",
  "ipnet",
  "num-traits",
