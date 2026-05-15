@@ -1,8 +1,57 @@
 use super::*;
 use regex::Regex;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
+use tokio::sync::OnceCell;
 
 static REGISTRY: &str = "registry-1.docker.io";
+
+static HOP_HEADERS: OnceCell<HashSet<&'static str>> = OnceCell::const_new();
+
+async fn get_hop_headers() -> &'static HashSet<&'static str> {
+    HOP_HEADERS
+        .get_or_init(|| async {
+            HashSet::from([
+                // RFC 2616
+                "connection",
+                "keep-alive",
+                "proxy-authenticate",
+                "proxy-authorization",
+                "te",
+                "trailer",
+                "transfer-encoding",
+                "upgrade",
+                // proxy generated
+                "x-forwarded-for",
+                "x-forwarded-host",
+                "x-forwarded-proto",
+                "x-real-ip",
+                "via",
+                "x-forwarded-port",
+                "x-forwarded-server",
+            ])
+        })
+        .await
+}
+
+fn rewrite_location(value: &str, uri: &Url, my_host: &str) -> String {
+    if value.starts_with('/') {
+        return format!("/{}{}", uri.host().unwrap(), value);
+    }
+
+    if value.starts_with("https://") {
+        if let Ok(url) = Url::parse(value) {
+            if url
+                .host_str()
+                .is_some_and(|h| h.contains("cloudflarestorage"))
+            {
+                return value.to_string();
+            }
+        }
+        return value.replace("https://", &format!("https://{}/", my_host));
+    }
+
+    value.to_string()
+}
 
 fn replace_host(content: &mut str, src: &str, dest: &str) -> Result<String> {
     let re = Regex::new(r#"(?P<attr>src|href)(?P<eq>=)(?P<quote>['"]?)(?P<url>(//|https://))"#)
@@ -52,15 +101,12 @@ pub async fn handler(
     dst_host: &str,
     query: Option<HashMap<String, String>>,
 ) -> Result<Response> {
-    let hops = HOP_HEADERS
-        .get_or_init(|| async { get_hop_headers().await })
-        .await;
     let my_host = req.headers().get("host")?.ok_or("Host header not found")?;
-
+    let hops = get_hop_headers().await;
     // build request
     let req_headers = Headers::new();
     for (key, value) in req.headers().entries() {
-        if hops.contains(&key) {
+        if hops.contains(key.as_str()) {
             continue;
         }
         req_headers.set(&key, &value)?;
@@ -68,23 +114,19 @@ pub async fn handler(
     req_headers.set("host", dst_host)?;
     req_headers.set("referer", "")?;
 
-    let mut req_init = RequestInit {
+    let body = req.bytes().await?;
+    let body = (!body.is_empty()).then(|| worker::wasm_bindgen::JsValue::from(body));
+
+    let req_init = RequestInit {
         method: req.method(),
         headers: req_headers,
-        body: None,
+        body,
         cf: CfProperties::default(),
         redirect: RequestRedirect::Manual,
         cache: None, // CacheMode::Default,
     };
-    // request body
-    if let Ok(body) = req.bytes().await {
-        if !body.is_empty() {
-            req_init.body = Some(wasm_bindgen::JsValue::from(body));
-        }
-    }
-    let new_req = Request::new_with_init(uri.as_ref(), &req_init)?;
-
     // send request
+    let new_req = Request::new_with_init(uri.as_ref(), &req_init)?;
     let mut response = Fetch::Request(new_req).send().await?;
 
     // update response
@@ -92,30 +134,8 @@ pub async fn handler(
     let status = response.status_code();
 
     for (key, value) in response.headers().entries() {
-        if hops.contains(&key) {
-            continue;
-        }
         let new_value = match (status, key.as_str()) {
-            (301..=308, "location") => {
-                if value.starts_with('/') {
-                    format!("/{}{}", uri.host().unwrap(), value)
-                } else if value.starts_with("https://") {
-                    if let Ok(url) = Url::parse(&value) {
-                        if url
-                            .host_str()
-                            .is_some_and(|host| host.contains("cloudflarestorage"))
-                        {
-                            value
-                        } else {
-                            value.replace("https://", &format!("https://{}/", my_host))
-                        }
-                    } else {
-                        value.replace("https://", &format!("https://{}/", my_host))
-                    }
-                } else {
-                    value
-                }
-            }
+            (301..=308, "location") => rewrite_location(&value, &uri, &my_host),
             (401, "www-authenticate") => {
                 value.replace("https://", &format!("https://{}/", my_host))
             }
@@ -123,43 +143,41 @@ pub async fn handler(
         };
         resp_header.set(&key, &new_value)?;
     }
-    let _ = resp_header.delete("content-security-policy");
-    let _ = resp_header.set("access-control-allow-origin", "*");
-    if let Some(s) = resp_header.get("content-type")? {
-        if s.contains("text/html") {
-            let _ = resp_header.delete("content-encoding");
-            let _ = resp_header.set(
-                "set-cookie",
-                format!("{}={}; Path=/; Max-Age=3600", COOKIE_HOST_KEY, dst_host).as_str(),
-            );
-            let mut body = response.text().await?;
-            let should_replace = query
-                .as_ref()
-                .and_then(|map| map.get("tul_rh"))
-                .map(|value| value != "n")
-                .unwrap_or(true);
-            let newbody = if should_replace {
-                replace_host(&mut body, dst_host, &my_host)?
-            } else {
-                body
-            };
-            let resp = Response::builder()
-                .with_headers(resp_header)
-                .with_status(status)
-                .body(ResponseBody::Body(newbody.into_bytes()));
-            return Ok(resp);
+    resp_header.delete("content-security-policy")?;
+    resp_header.set("access-control-allow-origin", "*")?;
+
+    if resp_header
+        .get("content-type")?
+        .is_some_and(|ct| ct.contains("text/html"))
+    {
+        resp_header.delete("content-encoding")?;
+        resp_header.set(
+            "set-cookie",
+            format!("{}={}; Path=/; Max-Age=3600", COOKIE_HOST_KEY, dst_host).as_str(),
+        )?;
+
+        let mut body = response.text().await?;
+        let should_replace = query.as_ref().and_then(|q| q.get("tul_rh")) != Some(&"n".to_string());
+
+        if should_replace {
+            body = replace_host(&mut body, dst_host, &my_host)?;
         }
+
+        return Ok(Response::builder()
+            .with_headers(resp_header)
+            .with_status(status)
+            .body(ResponseBody::Body(body.into_bytes())));
     }
 
     let resp = match response.stream() {
-        Err(_) => Response::builder()
-            .with_status(status)
-            .with_headers(resp_header)
-            .empty(),
         Ok(stream) => Response::builder()
             .with_status(status)
             .with_headers(resp_header)
             .from_stream(stream)?,
+        Err(_) => Response::builder()
+            .with_status(status)
+            .with_headers(resp_header)
+            .empty(),
     };
 
     Ok(resp)
