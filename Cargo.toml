@@ -13,12 +13,12 @@ crate-type = ["cdylib"]
 
 [dependencies]
 worker = { version = "0.8.3", features = ["http"] }
-futures = "0.3.32"
+futures = { version = "0.3.32", default-features = false }
 hickory-proto = { version = "0.26.1", default-features = false }
 tokio = { version = "1.52.3", features = ["io-util", "sync"], default-features = false }
-regex = "1.12.3"
+regex = { version = "1.12.3", default-features = false }
 getrandom = { version = "0.4", features = ["wasm_js"], default-features = false }
-sha2 = "0.11.0"
+sha2 = { version = "0.11.0", default-features = false }
 pin-project-lite = "0.2.17"
 
 [profile.release]
