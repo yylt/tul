@@ -6,7 +6,7 @@
 
 ## ✨ 特性
 
-🔒 Trojan 代理 - 基于 WebSocket 的 Trojan 协议代理，注意属于 Cloudflare IP 范围地址会 block，因
+🔒 Trojan 代理 - 基于 WebSocket 的 Trojan 协议代理，注意目标地址在 Cloudflare 范围内会 block
 
 🌐 通用网站镜像 - 支持绝大多数网址的镜像，访问失败时建议通过代理方式
 

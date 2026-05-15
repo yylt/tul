@@ -1,47 +1,48 @@
 use super::*;
 use js_sys::Uint8Array;
 use std::net::Ipv4Addr;
-use tokio::sync::OnceCell;
-use wasm_bindgen::JsValue;
+use worker::wasm_bindgen::JsValue;
 
 use hickory_proto::op::Message;
 use hickory_proto::rr::rdata::svcb::SvcParamValue;
 use hickory_proto::rr::{RData, RecordType};
 
-use ipnet::Ipv4Net;
-use prefix_trie::set::PrefixSet;
-
 const DNS_HEADER_SIZE: usize = 12;
 const QTYPE_A: u16 = 1;
 const QCLASS_IN: u16 = 1;
 
-static CF_TRIE: OnceCell<PrefixSet<Ipv4Net>> = OnceCell::const_new();
+const CF_NETWORKS: [(u32, u32); 14] = [
+    (ip_to_u32(103, 22, 200, 0), 22),
+    (ip_to_u32(103, 31, 4, 0), 22),
+    (ip_to_u32(104, 16, 0, 0), 13),
+    (ip_to_u32(104, 24, 0, 0), 14),
+    (ip_to_u32(108, 162, 192, 0), 18),
+    (ip_to_u32(131, 0, 72, 0), 22),
+    (ip_to_u32(141, 101, 64, 0), 18),
+    (ip_to_u32(162, 158, 0, 0), 15),
+    (ip_to_u32(172, 64, 0, 0), 13),
+    (ip_to_u32(173, 245, 48, 0), 20),
+    (ip_to_u32(188, 114, 96, 0), 20),
+    (ip_to_u32(190, 93, 240, 0), 20),
+    (ip_to_u32(197, 234, 240, 0), 22),
+    (ip_to_u32(198, 41, 128, 0), 17),
+];
 
-// ref: https://www.cloudflare.com/ips
-async fn get_cf_trie() -> PrefixSet<Ipv4Net> {
-    // TODO fetch from cloudflare
-    let ipv4s = vec![
-        "103.22.200.0/22",
-        "103.31.4.0/22",
-        "104.16.0.0/13",
-        "104.24.0.0/14",
-        "108.162.192.0/18",
-        "131.0.72.0/22",
-        "141.101.64.0/18",
-        "162.158.0.0/15",
-        "172.64.0.0/13",
-        "173.245.48.0/20",
-        "188.114.96.0/20",
-        "190.93.240.0/20",
-        "197.234.240.0/22",
-        "198.41.128.0/17",
-    ];
+const fn ip_to_u32(a: u8, b: u8, c: u8, d: u8) -> u32 {
+    (a as u32) << 24 | (b as u32) << 16 | (c as u32) << 8 | d as u32
+}
 
-    let mut pm: PrefixSet<Ipv4Net> = PrefixSet::new();
-    for ip in ipv4s {
-        pm.insert(ip.parse().unwrap());
-    }
-    pm
+fn is_cloudflare_ip(ip: Ipv4Addr) -> bool {
+    let ip_int = u32::from(ip);
+
+    CF_NETWORKS.iter().any(|&(net_start, mask_bits)| {
+        let mask = if mask_bits == 0 {
+            0
+        } else {
+            (!0u32) << (32 - mask_bits)
+        };
+        (ip_int & mask) == net_start
+    })
 }
 
 // DNS 报文构建
@@ -163,24 +164,16 @@ pub async fn resolve_a(domain: &str, resolver: &str) -> Result<Ipv4Addr> {
     extract_ipv4_from_response(&resp_bytes)
 }
 
-pub async fn is_cf_address<T: AsRef<str>, K: AsRef<str>>(
-    resolve: K,
-    addr: &Address<T>,
+pub async fn is_cf_address(
+    resolve: impl AsRef<str>,
+    addr: &Address<impl AsRef<str>>,
 ) -> Result<(bool, Ipv4Addr)> {
-    let trie = CF_TRIE.get_or_init(|| async { get_cf_trie().await }).await;
-    let v4fn = |ip: Ipv4Addr| -> Result<(bool, Ipv4Addr)> {
-        let ipnet =
-            Ipv4Net::new(ip, 32).map_err(|e| Error::RustError(format!("Invalid IPv4: {}", e)))?;
-        Ok((trie.get_lpm(&ipnet).is_some(), ip))
+    let ip = match addr {
+        Address::Ipv4(ip) => *ip,
+        Address::Domain(domain) => resolve_a(domain.as_ref(), resolve.as_ref()).await?,
     };
 
-    match addr {
-        Address::Ipv4(ip) => v4fn(*ip),
-        Address::Domain(domain) => {
-            let ip = resolve_a(domain.as_ref(), resolve.as_ref()).await?;
-            v4fn(ip)
-        }
-    }
+    Ok((is_cloudflare_ip(ip), ip))
 }
 
 pub async fn resolve_handler<T: AsRef<str>>(
@@ -237,15 +230,12 @@ pub async fn process_response(
         }
     };
 
-    // 2. 查找 HTTPS 类型的记录
+    // 2. 查找 HTTPS 类型记录，如果没有 HTTPS 记录，直接返回原始响应
     let record = message
         .answers
         .iter_mut()
         .find(|r| r.record_type() == RecordType::HTTPS);
 
-    let mut ipv4_hint = None;
-
-    // 3. 如果没有 HTTPS 记录，直接返回原始响应
     let record = match record {
         None => {
             console_debug!("[process_response] Return original: No HTTPS record found in answers");
@@ -254,7 +244,7 @@ pub async fn process_response(
         Some(rc) => rc,
     };
 
-    // 4. 从 HTTPS 记录中提取 IPv4 提示（Ipv4Hint）和 ECH 配置
+    // 3. 从 HTTPS 记录中提取 ECH 配置和 IPv4 提示（Ipv4Hint），有 ECHO 或 IPv4 不属于 CF 直接返回
     if let RData::HTTPS(ref hs) = record.data {
         for (_key, value) in hs.0.svc_params.iter() {
             match value {
@@ -262,7 +252,18 @@ pub async fn process_response(
                     console_debug!("[process_response] Return original: ECH already configured");
                     return Ok(response_bytes.to_vec());
                 }
-                SvcParamValue::Ipv4Hint(v4hint) => ipv4_hint = v4hint.0.first().copied(),
+                SvcParamValue::Ipv4Hint(hint) => {
+                    if let Some(first_a) = hint.0.first() {
+                        let ip = first_a.0; // 取出 Ipv4Addr
+                        if !(is_cloudflare_ip(ip)) {
+                            console_debug!(
+                                "[process_response] Return original: IP {} is not in Cloudflare range",
+                                ip
+                            );
+                            return Ok(response_bytes.to_vec());
+                        }
+                    }
+                }
                 _ => {}
             }
         }
@@ -271,37 +272,7 @@ pub async fn process_response(
         return Ok(response_bytes.to_vec());
     }
 
-    // 5. 检查 IP 地址是否属于 Cloudflare
-    let addr = match ipv4_hint {
-        None => {
-            console_debug!("[process_response] Return original: No Ipv4Hint found in HTTPS record");
-            return Ok(response_bytes.to_vec());
-        }
-        Some(addr) => addr,
-    };
-
-    let trie = CF_TRIE.get_or_init(|| async { get_cf_trie().await }).await;
-    let ipnet = match Ipv4Net::new(addr.0, 32) {
-        Ok(net) => net,
-        Err(e) => {
-            console_debug!(
-                "[process_response] Return original: Invalid IPv4 {}: {}",
-                addr,
-                e
-            );
-            return Ok(response_bytes.to_vec());
-        }
-    };
-
-    if trie.get_lpm(&ipnet).is_none() {
-        console_debug!(
-            "[process_response] Return original: IP {} is not in Cloudflare range",
-            addr
-        );
-        return Ok(response_bytes.to_vec());
-    }
-
-    // 6. 查询 ech_domain 的 HTTPS 记录
+    // 4. 查询 ech_domain 的 HTTPS
     let ech_response = match doh_query(ech_domain, RecordType::HTTPS.into(), resolver).await {
         Ok(resp) => resp,
         Err(e) => {
@@ -325,7 +296,7 @@ pub async fn process_response(
         }
     };
 
-    // 7. 替换原响应中的 HTTPS 记录数据
+    // 5. 替换原响应中的 HTTPS 记录数据
     if let Some(https_record) = ech_message
         .answers
         .iter_mut()
@@ -350,5 +321,27 @@ pub async fn process_response(
     } else {
         console_debug!("[process_response] Return original: No HTTPS record found in ech_domain response for {}", ech_domain);
         Ok(response_bytes.to_vec())
+    }
+}
+
+#[test]
+fn test_boundary_ips() {
+    let test_cases = vec![
+        ("104.16.0.0", true),      // 网络地址
+        ("104.23.255.255", true),  // 广播地址
+        ("104.15.255.255", false), // /13之外
+        ("104.24.0.0", true),      // /14的网络地址
+        ("104.27.255.255", true),  // /14的广播地址
+        ("104.28.0.0", false),     // /14之外
+    ];
+
+    for (ip_str, expected) in test_cases {
+        let ip = ip_str.parse::<Ipv4Addr>().unwrap();
+        assert_eq!(
+            is_cloudflare_ip(ip),
+            expected,
+            "Boundary test failed for {}",
+            ip_str
+        );
     }
 }
