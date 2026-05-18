@@ -12,16 +12,17 @@ use worker::*;
 // Cloudfalre ECH domain
 static ECH_DOMAIN: OnceCell<String> = OnceCell::const_new();
 
-// trojan password hash
-static TJ_PASSWORD: OnceCell<Vec<u8>> = OnceCell::const_new();
-
-// trojan on ws, the prefix path
-static TJ_PATH: OnceCell<String> = OnceCell::const_new();
-
 // suport DoH domain, like 1.1.1.1, doh.pub, dns.google
 static DOH_HOST: OnceCell<String> = OnceCell::const_new();
 
+// cookie destination address key.
 static COOKIE_HOST_KEY: &str = "tul_host";
+
+// trojan password hash
+static TJ_PASSWORD: OnceCell<Vec<u8>> = OnceCell::const_new();
+
+// trojan request path
+static TJ_PATH: OnceCell<String> = OnceCell::const_new();
 
 #[derive(Debug, Clone)]
 pub enum Address<T: AsRef<str>> {
@@ -44,28 +45,36 @@ async fn get_or_init_env<'a>(
     .await
 }
 
-async fn get_trojan_path(cx: &RouteContext<()>) -> String {
-    let pre = cx
-        .env
-        .secret("PREFIX")
-        .map_or("/tj".to_string(), |x| x.to_string());
-    if !pre.starts_with("/") {
-        return format!("/{}", pre);
-    }
-    pre
+async fn get_trojan_path(cx: &RouteContext<()>) -> &'static String {
+    TJ_PATH
+        .get_or_init(|| async {
+            let pre = cx
+                .env
+                .secret("PREFIX")
+                .map_or("/tj".to_string(), |x| x.to_string());
+            if !pre.starts_with("/") {
+                return format!("/{}", pre);
+            }
+            pre
+        })
+        .await
 }
 
-async fn get_trojan_password(cx: &RouteContext<()>) -> Vec<u8> {
-    let pw = cx
-        .env
-        .secret("PASSWORD")
-        .map_or("password".to_string(), |x| x.to_string());
-    Sha224::digest(pw.as_bytes())
-        .iter()
-        .map(|x| format!("{:02x}", x))
-        .collect::<String>()
-        .as_bytes()
-        .to_vec()
+async fn get_trojan_password(cx: &RouteContext<()>) -> &'static Vec<u8> {
+    TJ_PASSWORD
+        .get_or_init(|| async {
+            let pw = cx
+                .env
+                .secret("PASSWORD")
+                .map_or("password".to_string(), |x| x.to_string());
+            Sha224::digest(pw.as_bytes())
+                .iter()
+                .map(|x| format!("{:02x}", x))
+                .collect::<String>()
+                .as_bytes()
+                .to_vec()
+        })
+        .await
 }
 
 // parse path：[{scheme}://]{domain}:{port}{path}
@@ -146,9 +155,6 @@ fn build_search_url(query: &Option<HashMap<String, String>>) -> Result<(Url, &'s
 }
 
 pub async fn handler(req: Request, cx: RouteContext<()>) -> Result<Response> {
-    let tj_path = TJ_PATH
-        .get_or_init(|| async { get_trojan_path(&cx).await })
-        .await;
     let dns_host = get_or_init_env(&DOH_HOST, &cx, "DOH_HOST", "dns.google").await;
     let ech_domain = get_or_init_env(&ECH_DOMAIN, &cx, "ECH_DOMAIN", "linux.do").await;
 
@@ -167,7 +173,7 @@ pub async fn handler(req: Request, cx: RouteContext<()>) -> Result<Response> {
                 .body(ResponseBody::Body(bytes));
             Ok(new_resp)
         }
-        path if path.starts_with(tj_path.as_str()) => tj(req, cx).await,
+        path if path.starts_with(get_trojan_path(&cx).await) => tj(req, cx).await,
         path if path.starts_with("/v2") => api::image_handler(req, query).await,
         "/tul_search" => {
             let (url, host) = build_search_url(&query)?;
@@ -234,19 +240,18 @@ pub async fn handler(req: Request, cx: RouteContext<()>) -> Result<Response> {
 }
 
 pub async fn tj(_req: Request, cx: RouteContext<()>) -> Result<Response> {
-    let expected_hash = TJ_PASSWORD
-        .get_or_init(|| async { get_trojan_password(&cx).await })
-        .await;
     let dns_host = get_or_init_env(&DOH_HOST, &cx, "DOH_HOST", "dns.google").await;
+
     let WebSocketPair { server, client } = WebSocketPair::new()?;
     let response = Response::from_websocket(client)?;
     // cloudflare not support early data!
     server.accept()?;
+
     worker::wasm_bindgen_futures::spawn_local(async move {
         let events = server.events().expect("Failed to get event stream");
         let mut wsstream = websocket::WsStream::new(&server, events, None);
 
-        let result = match tj::parse(expected_hash, &mut wsstream).await {
+        let result = match tj::parse(get_trojan_password(&cx).await, &mut wsstream).await {
             Ok((hostname, port)) => {
                 let addr = match dns::is_cf_address(dns_host, &hostname).await {
                     Ok((true, _)) => {
