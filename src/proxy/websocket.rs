@@ -1,4 +1,4 @@
-use futures::StreamExt;
+use futures_util::StreamExt;
 use pin_project_lite::pin_project;
 use std::pin::Pin;
 use std::task::{Context, Poll};
@@ -9,7 +9,7 @@ static BUFSIZE: usize = 4096;
 
 pin_project! {
     pub struct WsStream<'a> {
-        ws: &'a  WebSocket,
+        ws: &'a WebSocket,
         events: EventStream<'a>,
         read_buffer: Vec<u8>,
         write_buffer: Vec<u8>,

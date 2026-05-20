@@ -2,7 +2,7 @@ name: Test
 
 on:
   pull_request:
-    branches: [ main ]
+    branches: [main]
 
 jobs:
   ci:
@@ -16,8 +16,8 @@ jobs:
           toolchain: stable
           override: true
           components: clippy
-      - name: Run clippy
-        run: cargo clippy --all-targets --all-features -- -D warnings
+      - name: Run CI
+        run: make ci
       - name: Build dev
         run: |
           cargo install -q worker-build
