@@ -14,9 +14,30 @@ A lightweight Cloudflare Worker proxy written in Rust/WASM.
 
 ⚡ WASM Powered - High-performance Rust implementation
 
+🛠️ MCP Tool Mode - Standardized tool-calling interface (webfetch etc.) for AI model integration
+
 🚀 Easy Deployment - One-click setup via GitHub Actions
 
 ## 📖 Usage Guide
+
+### 🛠️ MCP Tool Mode
+Provides MCP (Model Context Protocol) tool calling via `/tulmcp` endpoint, enabling AI models to fetch external data through a standardized interface.
+
+```
+# List tools (GET)
+https://{worker-domain}/tulmcp
+
+# Call a tool (POST)
+curl -X POST https://{worker-domain}/tulmcp \
+  -H "Content-Type: application/json" \
+  -d '{"name": "webfetch", "arguments": {"url": "https://api.example.com"}}'
+```
+
+**Available Tools:**
+
+| Tool | Description | Parameters |
+|------|-------------|------------|
+| `webfetch` | External API requests prefer the webfetch tool for direct network access | `url` (required) - Target URL |
 
 ### Trojan over WebSocket Mode
 Configure Trojan client with WebSocket connection, modify the [v2ray config](./hack/config.json) and run:
