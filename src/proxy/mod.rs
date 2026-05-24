@@ -1,5 +1,6 @@
 pub mod api;
 pub mod dns;
+pub mod mcp;
 pub mod tj;
 pub mod websocket;
 
@@ -173,9 +174,10 @@ pub async fn handler(req: Request, cx: RouteContext<()>) -> Result<Response> {
                 .body(ResponseBody::Body(bytes));
             Ok(new_resp)
         }
+        "/tulmcp" => mcp::handler(req, cx).await,
         path if path.starts_with(get_trojan_path(&cx).await) => tj(req, cx).await,
         path if path.starts_with("/v2") => api::image_handler(req, query).await,
-        "/tul_search" => {
+        "/tuls" => {
             let (url, host) = build_search_url(&query)?;
             api::handler(req, url, host, query).await
         }

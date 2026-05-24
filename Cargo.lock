@@ -728,6 +728,7 @@ dependencies = [
  "getrandom",
  "pin-project-lite",
  "regex",
+ "serde_json",
  "sha2",
  "tokio",
  "worker",

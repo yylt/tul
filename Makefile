@@ -20,8 +20,13 @@ init: ## 初始化项目（安装依赖）
 	cargo fetch
 	npm install -g wrangler
 
+.PHONY: build
+build: ## 构建项目（生成 WebAssembly 目标）
+	@printf "${GREEN}构建项目...${NC}\n"
+	cargo build --target wasm32-unknown-unknown --release
+
 .PHONY: deploy
-deploy: ## 部署到 Cloudflare Workers
+deploy: build ## 部署到 Cloudflare Workers（依赖 build）
 	@printf "${GREEN}部署到 Cloudflare Workers...${NC}\n"
 	@ npx wrangler deploy
 

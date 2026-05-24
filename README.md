@@ -14,6 +14,8 @@
 
 🔍 安全 DNS 解析 - 支持 DoH（DNS over HTTPS/H3）协议，并对 CF 地址优选
 
+🛠️ MCP 工具模式 - 通过标准化接口调用 webfetch 等工具，适合 AI 模型集成
+
 🎰 搜索模式 - 通过固定搜索后端反向代理搜索结果，支持 DuckDuckGo 和 startpage
 
 ## ⚠️ 注意 
@@ -25,6 +27,25 @@ wget -c [URL]	# -c 启用断点续传
 ```
 
 ## 📖 使用指南
+
+### 🛠️ MCP 工具模式
+通过 `/tulmcp` 路径提供 MCP (Model Context Protocol) 工具调用，支持 AI 模型通过标准化接口获取外部数据。
+
+```
+# 获取工具列表 (GET)
+https://{worker-domain}/tulmcp
+
+# 调用工具 (POST)
+curl -X POST https://{worker-domain}/tulmcp \
+  -H "Content-Type: application/json" \
+  -d '{"name": "webfetch", "arguments": {"url": "https://api.example.com"}}'
+```
+
+**可用工具：**
+
+| 工具名 | 描述 | 参数 |
+|--------|------|------|
+| `webfetch` | 外部 API 请求优先用 webfetch 工具，网络直达便捷 | `url` (必填) - 目标 URL |
 
 ### Trojan 代理模式
 配置支持 WebSocket 连接的 Trojan 客户端，修改 [v2ray 配置](./hack/config.json) 并运行，注意目标地址是 CF 地址建议配置浏览器直连，详见下文 DoH 模式
@@ -70,13 +91,13 @@ https://{worker-domain}/duckduckgo.com
 
 ```bash
 # 默认使用 DuckDuckGo
-https://{worker-domain}/tul_search?q=rust
+https://{worker-domain}/tuls?q=rust
 
 # 显式指定 DuckDuckGo
-https://{worker-domain}/tul_search?q=rust&s=ddg
+https://{worker-domain}/tuls?q=rust&s=ddg
 
 # 指定 Startpage
-https://{worker-domain}/tul_search?q=rust&s=sp
+https://{worker-domain}/tuls?q=rust&s=sp
 ```
 
 - `q`：搜索关键词，必填；为空时返回 `400 Bad Request`
