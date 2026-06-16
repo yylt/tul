@@ -3,12 +3,7 @@ updates:
   - package-ecosystem: "cargo"
     directory: "/" # Location of your Cargo.toml and Cargo.lock files
     schedule:
-      interval: "weekly"
-    groups:
-      worker:
-        patterns:
-          - "worker"
-          - "worker-macros"
+      interval: daily
   # Enable version updates for GitHub Actions
   - package-ecosystem: "github-actions"
     directory: "/"
