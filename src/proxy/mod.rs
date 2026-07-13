@@ -1,5 +1,6 @@
 pub mod api;
 pub mod dns;
+pub mod ip;
 pub mod mcp;
 pub mod tj;
 pub mod websocket;
@@ -181,6 +182,8 @@ pub async fn handler(req: Request, cx: RouteContext<()>) -> Result<Response> {
             let (url, host) = build_search_url(&query)?;
             api::handler(req, url, host, query).await
         }
+        "/tul_ip" => ip::handler_text(&req).await,
+        "/" => ip::handler_html(&req).await,
         _ => {
             let cookie_host = req
                 .headers()
