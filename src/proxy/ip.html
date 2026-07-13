@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Your Connection</title>
+<style>
+body { font-family: monospace; background: #111; color: #ccc; margin: 0; padding: 16px; }
+h1 { font-size: 1rem; color: #888; font-weight: normal; margin: 0 0 4px; }
+.ip { font-size: 1.5rem; color: #fff; margin: 0 0 16px; }
+table { width: 100%; border-collapse: collapse; max-width: 600px; }
+td { padding: 6px 8px; font-size: .85rem; border-bottom: 1px solid #222; word-break: break-all; }
+td:first-child { color: #888; width: 140px; white-space: nowrap; }
+tr:last-child td { border-bottom: none; }
+.cli { margin-top: 24px; max-width: 600px; }
+.cli h2 { font-size: .9rem; color: #888; font-weight: normal; margin: 0 0 8px; }
+.cli pre { background: #1a1a1a; padding: 12px; border-radius: 4px; margin: 0; font-size: .85rem; color: #ddd; overflow-x: auto; }
+.cli .cmd { color: #0a0; }
+.cli .arrow { color: #666; }
+.cli .result { color: #fff; }
+</style>
+</head>
+<body>
+<h1>Your Connection</h1>
+<div class="ip">{IP}</div>
+<table>
+<!-- ROWS -->
+</table>
+<div class="cli">
+<h2>Command Line Interface</h2>
+<pre><span class="cmd">$ curl {HOST}/tul_ip</span>  <span class="arrow">⇒</span>  <span class="result">{IP}</span></pre>
+</div>
+</body>
+</html>

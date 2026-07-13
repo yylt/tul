@@ -3,4 +3,4 @@ main = "build/worker/shim.mjs"
 compatibility_date = "2025-01-10"
 
 [build]
-command = "command -v worker-build &> /dev/null && worker-build --dev || cargo install -q worker-build && worker-build --dev"
+command = "command -v worker-build &> /dev/null && worker-build --dev || cargo install -q worker-build --version 0.8.5 && worker-build --dev"
