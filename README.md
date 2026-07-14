@@ -143,6 +143,45 @@ RRTYPE=HTTPS dnslookup v2ex.com h3://{worker-domain}/dns-query
 
 ## 🎨 部署
 
+### 本地部署
+
+1.  **安装依赖**
+    ```bash
+    # 安装 Rust (如已安装可跳过)
+    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+
+    # 添加 wasm 编译目标
+    rustup target add wasm32-unknown-unknown
+
+    # 安装 wrangler
+    npm install -g wrangler
+    ```
+
+2.  **配置 API 令牌**
+    - 前往 [Cloudflare Dashboard](https://dash.cloudflare.com/profile/api-tokens) 创建 API Token
+    - 编辑项目根目录下的 `.env` 文件，填入你的 Token：
+    ```
+    CLOUDFLARE_API_TOKEN=your-api-token-here
+    ```
+
+3.  **配置 Secret（可选）**
+    ```bash
+    # 设置 Trojan 密码
+    npx wrangler secret put PASSWORD
+
+    # 设置 Trojan 路径前缀（默认 /tj）
+    npx wrangler secret put PREFIX
+
+    # 设置 DoH 上游服务器（默认 1.1.1.1）
+    npx wrangler secret put DOH_HOST
+    ```
+
+4.  **部署**
+    ```bash
+    make deploy
+    ```
+    部署成功后，访问 `https://{your-worker-name}.{your-subdomain}.workers.dev` 即可使用。
+
 ### Fork 并部署（推荐）
 
 1.  **Fork 此仓库**

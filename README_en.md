@@ -72,25 +72,44 @@ docker pull your-worker.your-subdomain.workers.dev/library/ubuntu:latest
 
 ## 🎨 Deploy
 
-### Easy Deploy
-click on the button below:
+### Local Deployment
 
-[![Deploy to Cloudflare Workers](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/)
+1.  **Install Dependencies**
+    ```bash
+    # Install Rust (skip if already installed)
+    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
-and visit https://{YOUR-WORKERS-SUBDOMAIN}.workers.dev.
+    # Add wasm target
+    rustup target add wasm32-unknown-unknown
 
-### Manually
-1. [Create an API token](https://developers.cloudflare.com/fundamentals/api/get-started/create-token/) from the cloudflare dashboard.
-2. Update `.env` file and fill the values based on your tokens
+    # Install wrangler
+    npm install -g wrangler
+    ```
 
-| Variable            | Description                                      |
-|---------------------|--------------------------------------------------|
-| CLOUDFLARE_API_TOKEN | The API key retrieved from Cloudflare dashboard |
+2.  **Configure API Token**
+    - Go to [Cloudflare Dashboard](https://dash.cloudflare.com/profile/api-tokens) to create an API Token
+    - Edit the `.env` file in the project root, fill in your token:
+    ```
+    CLOUDFLARE_API_TOKEN=your-api-token-here
+    ```
 
-3. Deploy
-```sh
-$ make deploy
-```
+3.  **Configure Secrets (Optional)**
+    ```bash
+    # Set Trojan password
+    npx wrangler secret put PASSWORD
+
+    # Set Trojan path prefix (default /tj)
+    npx wrangler secret put PREFIX
+
+    # Set DoH upstream server (default 1.1.1.1)
+    npx wrangler secret put DOH_HOST
+    ```
+
+4.  **Deploy**
+    ```bash
+    make deploy
+    ```
+    Once deployed, visit `https://{your-worker-name}.{your-subdomain}.workers.dev` to use it.
 
 ### Fork and Deploy (recommended)
 
