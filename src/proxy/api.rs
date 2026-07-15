@@ -11,23 +11,44 @@ async fn get_hop_headers() -> &'static HashSet<&'static str> {
     HOP_HEADERS
         .get_or_init(|| async {
             HashSet::from([
-                // RFC 2616
+                // RFC 2616 hop-by-hop
+                "authorization",
                 "connection",
+                "content-length",
+                "host",
                 "keep-alive",
                 "proxy-authenticate",
                 "proxy-authorization",
+                "referer",
                 "te",
                 "trailer",
                 "transfer-encoding",
                 "upgrade",
+                // content negotiation / integrity
+                "accept-encoding",
+                "content-md5",
+                // Azure Storage signing headers
+                "x-ms-date",
+                "x-ms-version",
+                "x-ms-blob-type",
+                // Cloudflare metadata
+                "cf-connecting-ip",
+                "cf-ew-via",
+                "cf-ipcountry",
+                "cf-ray",
+                "cf-request-id",
+                "cf-visitor",
+                "cf-worker",
+                // loop prevention
+                "cdn-loop",
                 // proxy generated
+                "via",
                 "x-forwarded-for",
                 "x-forwarded-host",
-                "x-forwarded-proto",
-                "x-real-ip",
-                "via",
                 "x-forwarded-port",
+                "x-forwarded-proto",
                 "x-forwarded-server",
+                "x-real-ip",
             ])
         })
         .await
