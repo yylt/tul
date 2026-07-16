@@ -180,11 +180,12 @@ pub async fn handler(req: Request, cx: RouteContext<()>) -> Result<Response> {
         path if path.starts_with("/v2") => api::image_handler(req, query).await,
         "/tuls" => {
             let (url, host) = build_search_url(&query)?;
-            api::handler(req, url, host, query).await
+            api::handler(req, url, host).await
         }
         "/tul_ip" => ip::handler_text(&req).await,
         "/" => ip::handler_html(&req).await,
         _ => {
+            let req_url = req.url()?;
             let cookie_host = req
                 .headers()
                 .get("cookie")?
@@ -220,7 +221,7 @@ pub async fn handler(req: Request, cx: RouteContext<()>) -> Result<Response> {
                 host,
                 port,
                 path,
-                query
+                req_url.query(),
             );
 
             let mut url = match (port, path) {
@@ -229,17 +230,11 @@ pub async fn handler(req: Request, cx: RouteContext<()>) -> Result<Response> {
                 (None, Some(path)) => format!("{}://{}{}", scheme, host, path),
                 (None, None) => format!("{}://{}", scheme, host),
             };
-            if let Some(v) = &query {
+            if let Some(raw_query) = req_url.query() {
                 url.push('?');
-                url.push_str(
-                    v.iter()
-                        .map(|(k, v)| format!("{}={}", k, v))
-                        .collect::<Vec<_>>()
-                        .join("&")
-                        .as_str(),
-                );
+                url.push_str(raw_query);
             }
-            api::handler(req, Url::parse(&url)?, host, query).await
+            api::handler(req, Url::parse(&url)?, host).await
         }
     }
 }

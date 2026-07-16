@@ -12,7 +12,6 @@ async fn get_hop_headers() -> &'static HashSet<&'static str> {
         .get_or_init(|| async {
             HashSet::from([
                 // RFC 2616 hop-by-hop
-                "authorization",
                 "connection",
                 "content-length",
                 "host",
@@ -24,9 +23,6 @@ async fn get_hop_headers() -> &'static HashSet<&'static str> {
                 "trailer",
                 "transfer-encoding",
                 "upgrade",
-                // content negotiation / integrity
-                "accept-encoding",
-                "content-md5",
                 // Azure Storage signing headers
                 "x-ms-date",
                 "x-ms-version",
@@ -110,18 +106,13 @@ pub async fn image_handler(
 
     let full_url = format!("https://{}{}", domain, req_url.path());
     if let Ok(url) = Url::parse(&full_url) {
-        handler(req, url, domain, None).await
+        handler(req, url, domain).await
     } else {
         Response::error("Not Found", 404)
     }
 }
 
-pub async fn handler(
-    mut req: Request,
-    uri: Url,
-    dst_host: &str,
-    query: Option<HashMap<String, String>>,
-) -> Result<Response> {
+pub async fn handler(mut req: Request, uri: Url, dst_host: &str) -> Result<Response> {
     let my_host = req.headers().get("host")?.ok_or("Host header not found")?;
     let hops = get_hop_headers().await;
     // build request
@@ -133,7 +124,6 @@ pub async fn handler(
         req_headers.set(&key, &value)?;
     }
     req_headers.set("host", dst_host)?;
-    req_headers.set("referer", "")?;
 
     let body = req.bytes().await?;
     let body = (!body.is_empty()).then(|| worker::wasm_bindgen::JsValue::from(body));
@@ -178,11 +168,7 @@ pub async fn handler(
         )?;
 
         let mut body = response.text().await?;
-        let should_replace = query.as_ref().and_then(|q| q.get("tul_rh")) != Some(&"n".to_string());
-
-        if should_replace {
-            body = replace_host(&mut body, dst_host, &my_host)?;
-        }
+        body = replace_host(&mut body, dst_host, &my_host)?;
 
         return Ok(Response::builder()
             .with_headers(resp_header)
