@@ -18,6 +18,8 @@
 
 🎰 搜索模式 - 通过固定搜索后端反向代理搜索结果，支持 DuckDuckGo 和 startpage
 
+📋 IP 信息展示 - 默认首页显示请求详情（IP、国家、城市、UA 等），`/tul_ip` 纯文本返回公网 IP
+
 ## ⚠️ 注意 
 CF worker 读写超时时间 10s, 建议使用断点续传下载大文件。命令如下：
 
@@ -103,6 +105,17 @@ https://{worker-domain}/tuls?q=rust&s=sp
 - `q`：搜索关键词，必填；为空时返回 `400 Bad Request`
 - `s`：搜索后端，可选，支持 `ddg` / `duckduckgo` 和 `sp` / `startpage`
 - 未传 `s` 或传入未知值时，默认使用 `ddg`
+
+### IP 信息查询
+访问首页 `/` 查看请求详情（IP、国家、城市、数据中心等），`/tul_ip` 纯文本返回公网 IP。
+
+```bash
+# 获取纯文本公网 IP
+curl https://{worker-domain}/tul_ip
+
+# 浏览器访问首页查看详细信息
+open https://{worker-domain}/
+```
 
 ### 镜像仓库模式
 代理 docker.io 拉取镜像请求

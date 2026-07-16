@@ -135,6 +135,16 @@ jobs:
           chmod +x integration/e2e-test.sh
           ./integration/e2e-test.sh
 
+      - name: Run mirror tests
+        env:
+          WORKER_URL: http://localhost:8787
+        run: |
+          echo "=========================================="
+          echo "Running Docker Registry Mirror Tests"
+          echo "=========================================="
+          chmod +x integration/mirror-test.sh
+          ./integration/mirror-test.sh
+
       - name: Display wrangler runtime logs
         if: always()
         run: |
