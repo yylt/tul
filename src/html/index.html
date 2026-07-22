@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Your Connection</title>
+<style>
+<!-- NORMAL_CSS -->
+body { align-items: flex-start; padding-top: 48px; }
+.container { max-width: 680px; width: 100%; }
+h1 { font-size: 1rem; color: #888; font-weight: 400; margin: 0 0 18px; }
+table { width: 100%; border-collapse: collapse; }
+td { padding: 7px 10px; font-size: .85rem; border-bottom: 1px solid #eee; word-break: break-all; }
+td:first-child { color: #888; width: 140px; white-space: nowrap; }
+td a, td a:visited { color: #444; text-decoration: none; border-bottom: 1px solid #ccc; }
+td a:hover { border-bottom-color: #888; }
+tr:last-child td { border-bottom: none; }
+.section { margin-top: 28px; }
+.section h2 { font-size: .9rem; color: #888; font-weight: 400; margin: 0 0 10px; }
+.section pre { background: #f0f0f0; padding: 14px 16px; border-radius: 6px; margin: 0 0 12px; font-size: .85rem; color: #333; overflow-x: auto; }
+.section .cmd { color: #080; }
+.section .arrow { color: #bbb; }
+.section .result { color: #111; }
+.section p { font-size: .85rem; color: #333; margin-bottom: 6px; }
+</style>
+</head>
+<body>
+<div class="container">
+<h1>Your Connection</h1>
+<table>
+<!-- ROWS -->
+</table>
+<div class="section">
+<h2>Command Line Interfaces</h2>
+<pre><span class="cmd">$ curl {HOST}/tul_ip</span>  <span class="arrow">&rArr;</span>  <span class="result">{IP}</span></pre>
+</div>
+<div class="section">
+<h2>Tools</h2>
+<p><a href="/tul_dl">Accelerator</a> &mdash; enter a URL to proxy web pages or download files</p>
+<p><a href="/tul_s">Search</a> &mdash; web search via DuckDuckGo or Startpage</p>
+</div>
+</div>
+</body>
+</html>

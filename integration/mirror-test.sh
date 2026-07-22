@@ -33,7 +33,17 @@ download_crane() {
 
     echo -e "${YELLOW}Downloading crane ${CRANE_VER}...${NC}"
     mkdir -p "$CRANE_DIR"
-    curl -sSL "$CRANE_URL" -o "${CRANE_DIR}/${CRANE_TGZ}"
+    for i in 1 2 3; do
+        if curl -fsSL --retry 2 --retry-delay 5 "$CRANE_URL" -o "${CRANE_DIR}/${CRANE_TGZ}" 2>/dev/null; then
+            break
+        fi
+        echo -e "${YELLOW}Download attempt $i failed, retrying...${NC}"
+        sleep 5
+    done
+    if [ ! -f "${CRANE_DIR}/${CRANE_TGZ}" ]; then
+        echo -e "${RED}Failed to download crane after 3 attempts${NC}"
+        exit 1
+    fi
     tar xzf "${CRANE_DIR}/${CRANE_TGZ}" -C "$CRANE_DIR" crane
     chmod +x "$CRANE_BIN"
     echo -e "${GREEN}Crane installed at ${CRANE_BIN}${NC}"

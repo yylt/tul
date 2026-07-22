@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Search</title>
+<style>
+<!-- NORMAL_CSS -->
+.radios { display: flex; justify-content: center; gap: 24px; margin-bottom: 14px; }
+.radios label { font-size: .85rem; cursor: pointer; display: flex; align-items: center; gap: 5px; }
+.radios input[type=radio] { cursor: pointer; accent-color: #666; }
+</style>
+</head>
+<body>
+<div class="card">
+<p class="desc">Search the web through DuckDuckGo or Startpage.</p>
+<div class="radios">
+<label><input type="radio" name="engine" value="ddg" checked> DuckDuckGo</label>
+<label><input type="radio" name="engine" value="sp"> Startpage</label>
+</div>
+<form onsubmit="return go(event)" class="form-row">
+<input id="q" type="text" placeholder="search terms..." autofocus>
+<button class="btn">Go</button>
+</form>
+<p class="back"><a href="/">&larr; Back to Home</a></p>
+</div>
+<script>
+function go(e) { e.preventDefault(); var q = document.getElementById('q').value.trim(); var s = document.querySelector('input[name="engine"]:checked').value; if (q) location.href = '/tul_s?q=' + encodeURIComponent(q) + '&s=' + s; return false; }
+</script>
+</body>
+</html>
