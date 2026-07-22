@@ -178,11 +178,16 @@ pub async fn handler(req: Request, cx: RouteContext<()>) -> Result<Response> {
         "/tulmcp" => mcp::handler(req, cx).await,
         path if path.starts_with(get_trojan_path(&cx).await) => tj(req, cx).await,
         path if path.starts_with("/v2") => api::image_handler(req, query).await,
-        "/tuls" => {
-            let (url, host) = build_search_url(&query)?;
-            api::handler(req, url, host).await
+        "/tul_s" => {
+            if query.as_ref().and_then(|q| q.get("q")).is_some() {
+                let (url, host) = build_search_url(&query)?;
+                api::handler(req, url, host).await
+            } else {
+                ip::handler_s(&req).await
+            }
         }
         "/tul_ip" => ip::handler_text(&req).await,
+        "/tul_dl" => ip::handler_dl(&req).await,
         "/" => ip::handler_html(&req).await,
         _ => {
             let req_url = req.url()?;

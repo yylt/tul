@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Search</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: monospace; background: #fff; color: #333; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 16px; }
+.card { text-align: center; max-width: 500px; width: 100%; }
+.desc { font-size: .85rem; color: #888; line-height: 1.6; margin-bottom: 20px; }
+.form-row { display: flex; gap: 8px; margin-bottom: 20px; }
+.form-row input { flex: 1; border: 1px solid #ddd; border-radius: 4px; outline: none; font-size: .85rem; font-family: monospace; color: #333; padding: 10px 12px; background: #fff; }
+.form-row input::placeholder { color: #ccc; }
+.form-row select { border: 1px solid #ddd; border-radius: 4px; outline: none; font-size: .85rem; font-family: monospace; color: #333; padding: 10px 8px; background: #fff; cursor: pointer; }
+a { color: #333; text-decoration: underline; font-size: .85rem; }
+a:hover { color: #000; }
+</style>
+</head>
+<body>
+<div class="card">
+<p class="desc">Search the web through DuckDuckGo or Startpage.</p>
+<form onsubmit="go(event)" class="form-row">
+<input id="q" type="text" placeholder="search terms..." autofocus>
+<select id="s">
+<option value="ddg">DuckDuckGo</option>
+<option value="sp">Startpage</option>
+</select>
+</form>
+<p><a href="/">&#8592; Back to Connection Info</a></p>
+</div>
+<script>
+function go(e) { e.preventDefault(); var q = document.getElementById('q').value.trim(); var s = document.getElementById('s').value; if (q) location.href = '/tul_s?q=' + encodeURIComponent(q) + '&s=' + s; }
+</script>
+</body>
+</html>

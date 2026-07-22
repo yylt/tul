@@ -16,10 +16,13 @@ td a:hover { text-decoration: underline; }
 tr:last-child td { border-bottom: none; }
 .cli { margin-top: 24px; max-width: 600px; }
 .cli h2 { font-size: .9rem; color: #666; font-weight: normal; margin: 0 0 8px; }
-.cli pre { background: #f5f5f5; padding: 12px; border-radius: 4px; margin: 0; font-size: .85rem; color: #333; overflow-x: auto; }
+.cli pre { background: #f5f5f5; padding: 12px; border-radius: 4px; margin: 0 0 12px; font-size: .85rem; color: #333; overflow-x: auto; }
 .cli .cmd { color: #080; }
 .cli .arrow { color: #999; }
 .cli .result { color: #111; }
+.cli p { font-size: .85rem; color: #333; }
+.cli p a { color: #333; text-decoration: underline; }
+.cli p a:hover { color: #000; }
 </style>
 </head>
 <body>
@@ -29,8 +32,13 @@ tr:last-child td { border-bottom: none; }
 <!-- ROWS -->
 </table>
 <div class="cli">
-<h2>Command Line Interface</h2>
+<h2>Command Line Interfaces</h2>
 <pre><span class="cmd">$ curl {HOST}/tul_ip</span>  <span class="arrow">⇒</span>  <span class="result">{IP}</span></pre>
+</div>
+<div class="cli">
+<h2>Tools</h2>
+<p><a href="/tul_dl">Download Accelerator</a> &mdash; enter a URL to proxy web pages or download files</p>
+<p><a href="/tul_s">Search</a> &mdash; web search via DuckDuckGo or Startpage</p>
 </div>
 </body>
 </html>

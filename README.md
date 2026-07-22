@@ -93,13 +93,13 @@ https://{worker-domain}/duckduckgo.com
 
 ```bash
 # 默认使用 DuckDuckGo
-https://{worker-domain}/tuls?q=rust
+https://{worker-domain}/tul_s?q=rust
 
 # 显式指定 DuckDuckGo
-https://{worker-domain}/tuls?q=rust&s=ddg
+https://{worker-domain}/tul_s?q=rust&s=ddg
 
 # 指定 Startpage
-https://{worker-domain}/tuls?q=rust&s=sp
+https://{worker-domain}/tul_s?q=rust&s=sp
 ```
 
 - `q`：搜索关键词，必填；为空时返回 `400 Bad Request`
