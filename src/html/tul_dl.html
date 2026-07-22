@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="zh">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Tools</title>
+<title>Accelerator</title>
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body { font-family: monospace; background: #fff; color: #333; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 16px; }
@@ -18,11 +18,11 @@ a:hover { color: #000; }
 </head>
 <body>
 <div class="card">
-<p class="desc">输入目标地址加速访问网页或下载文件。<code>https://</code> 可省略。</p>
+<p class="desc">Enter a URL to accelerate web access or download files. <code>https://</code> can be omitted.</p>
 <form onsubmit="go(event)">
 <input id="url" type="text" placeholder="example.com/file.zip" autofocus>
 </form>
-<p><a href="/">&#8592; 返回连接信息</a></p>
+<p><a href="/">&#8592; Back to Connection Info</a></p>
 </div>
 <script>
 function go(e) { e.preventDefault(); var v = document.getElementById('url').value.trim(); if (v) location.href = '/' + v; }
