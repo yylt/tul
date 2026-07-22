@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Accelerator</title>
+<style>
+<!-- NORMAL_CSS -->
+</style>
+</head>
+<body>
+<div class="card">
+<p class="desc">Enter a URL to accelerate web access or download files. <code>https://</code> can be omitted.</p>
+<form onsubmit="return go(event)" class="form-row">
+<input id="url" type="text" placeholder="example.com/file.zip" autofocus>
+<button class="btn">Go</button>
+</form>
+<p class="back"><a href="/">&larr; Back to Home</a></p>
+</div>
+<script>
+function go(e) { e.preventDefault(); var v = document.getElementById('url').value.trim(); if (v) location.href = '/' + v; return false; }
+</script>
+</body>
+</html>

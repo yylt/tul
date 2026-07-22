@@ -6,19 +6,19 @@
 
 ## ✨ 特性
 
-🔒 Trojan 代理 - 基于 WebSocket 的 Trojan 协议代理，注意目标地址在 Cloudflare 范围内会 block
+🔒 [Trojan 代理](#trojan-代理模式) - 基于 WebSocket 的 Trojan 协议代理，注意目标地址在 Cloudflare 范围内会 block
 
-🌐 通用网站镜像 - 支持绝大多数网址的镜像，访问失败时建议通过代理方式
+🌐 [通用网站镜像](#通用网站镜像) - 支持绝大多数网址的镜像，访问失败时建议通过代理方式
 
-🐳 容器镜像仓库支持 - 默认从 Docker Hub 拉取容器镜像，同时支持任意容器镜像仓库
+🐳 [容器镜像仓库支持](#镜像仓库模式) - 默认从 Docker Hub 拉取容器镜像，同时支持任意容器镜像仓库
 
-🔍 安全 DNS 解析 - 支持 DoH（DNS over HTTPS/H3）协议，并对 CF 地址优选
+🔍 [安全 DNS 解析](#doh安全-dns-解析-模式) - 支持 DoH（DNS over HTTPS/H3）协议，并对 CF 地址优选
 
-🛠️ MCP 工具模式 - 通过标准化接口调用 webfetch 等工具，适合 AI 模型集成
+🛠️ [MCP 工具模式](#mcp-工具模式) - 通过标准化接口调用 webfetch 等工具，适合 AI 模型集成
 
-🎰 搜索模式 - 通过固定搜索后端反向代理搜索结果，支持 DuckDuckGo 和 startpage
+🎰 [搜索模式](#搜索代理模式) - 通过固定搜索后端反向代理搜索结果，支持 DuckDuckGo 和 startpage
 
-📋 IP 信息展示 - 默认首页显示请求详情（IP、国家、城市、UA 等），`/tul_ip` 纯文本返回公网 IP
+📋 [首页展示](#首页展示) - 默认首页展示当前连接信息（IP、国家、城市、UA 等）及所有可用 Tools 入口，`/tul_ip` 纯文本返回公网 IP
 
 ## ⚠️ 注意 
 CF worker 读写超时时间 10s, 建议使用断点续传下载大文件。命令如下：
@@ -93,21 +93,21 @@ https://{worker-domain}/duckduckgo.com
 
 ```bash
 # 默认使用 DuckDuckGo
-https://{worker-domain}/tuls?q=rust
+https://{worker-domain}/tul_s?q=rust
 
 # 显式指定 DuckDuckGo
-https://{worker-domain}/tuls?q=rust&s=ddg
+https://{worker-domain}/tul_s?q=rust&s=ddg
 
 # 指定 Startpage
-https://{worker-domain}/tuls?q=rust&s=sp
+https://{worker-domain}/tul_s?q=rust&s=sp
 ```
 
 - `q`：搜索关键词，必填；为空时返回 `400 Bad Request`
 - `s`：搜索后端，可选，支持 `ddg` / `duckduckgo` 和 `sp` / `startpage`
 - 未传 `s` 或传入未知值时，默认使用 `ddg`
 
-### IP 信息查询
-访问首页 `/` 查看请求详情（IP、国家、城市、数据中心等），`/tul_ip` 纯文本返回公网 IP。
+### 首页展示
+访问首页 `/` 查看当前连接详情（IP、国家、城市、数据中心、Colo、UA、语言等）及所有可用 Tools 入口（下载加速器、搜索、MCP Server），`/tul_ip` 纯文本返回公网 IP。
 
 ```bash
 # 获取纯文本公网 IP
@@ -153,6 +153,16 @@ RRTYPE=HTTPS dnslookup v2ex.com h3://{worker-domain}/dns-query
 
 ### 先决条件
 拥有 API 访问权限的 Cloudflare 账户密钥
+
+### 免费域名获取
+部署前建议注册免费域名以绑定自定义域名：
+
+| 注册平台 | 可用域名 |
+|----------|----------|
+| [register.us.kg](https://register.us.kg/) | `qzz.io` |
+| [my.dnshe.com](https://my.dnshe.com/) | `cc.cd` / `ccwu.cd` |
+| [domain.stackryze.com](https://domain.stackryze.com/) | `nx.kg` / `sryze.cc` |
+| [dashboard.katabump.com](https://dashboard.katabump.com/) | `kdns.fr`
 
 ## 🎨 部署
 

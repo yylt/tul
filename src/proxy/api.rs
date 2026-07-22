@@ -169,6 +169,11 @@ pub async fn handler(mut req: Request, uri: Url, dst_host: &str) -> Result<Respo
 
         let mut body = response.text().await?;
         body = replace_host(&mut body, dst_host, &my_host)?;
+        if dst_host == "duckduckgo.com" {
+            body = body.replace("improving.duckduckgo.com", "0.0.0.0");
+            body = body.replace("links.duckduckgo.com", "0.0.0.0");
+            body = body.replace("external-content.duckduckgo.com", "0.0.0.0");
+        }
 
         return Ok(Response::builder()
             .with_headers(resp_header)

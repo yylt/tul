@@ -71,7 +71,7 @@ src/
     ├── mod.rs              # Main router, path parsing, Trojan WS handler
     ├── api.rs              # HTTP proxy (handler), Docker registry proxy (image_handler/v2_handler)
     ├── ip.rs               # /tul_ip and / info endpoints
-    ├── ip.html             # HTML template for /
+    ├── index.html           # HTML template for /
     ├── dns.rs              # DoH proxy, DNS wire-format parsing, CF IP detection, ECH injection
     ├── mcp.rs              # MCP tool server (webfetch)
     ├── tj.rs               # Trojan protocol parser
@@ -90,7 +90,8 @@ src/
 | `/tulmcp` | `mcp::handler` | MCP tool server (GET=listing, POST=invoke) |
 | `/tj*` | `tj()` (mod.rs) | Trojan over WebSocket |
 | `/v2` | `api::image_handler` | Docker registry proxy |
-| `/tuls` | `api::handler` | Search proxy (ddg/sp) |
+| `/tul_s` | `api::handler` / `ip::handler_s` | Search proxy (ddg/sp) + search UI |
+| `/tul_dl` | `ip::handler_dl` | Download accelerator page |
 | `/tul_ip` | `ip::handler_text` | Plaintext client IP |
 | `/` | `ip::handler_html` | HTML info page |
 | `*` | `parse_path` → `api::handler` | Generic web proxy |

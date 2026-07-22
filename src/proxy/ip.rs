@@ -78,7 +78,9 @@ pub async fn handler_html(req: &Request) -> Result<Response> {
         ("MIME Type", mime.clone()),
     ];
 
-    let mut html = String::from(include_str!("ip.html"));
+    let normal_css = include_str!("../html/tul_normal.css");
+    let mut html = String::from(include_str!("../html/index.html"));
+    html = html.replace("<!-- NORMAL_CSS -->", normal_css);
 
     let mut table_rows = String::new();
     for (label, value) in &rows {
@@ -100,6 +102,42 @@ pub async fn handler_html(req: &Request) -> Result<Response> {
     html = html.replace("<!-- ROWS -->", &table_rows);
     html = html.replace("{IP}", &escape_html(&ip));
     html = html.replace("{HOST}", &escape_html(&host));
+
+    let headers = Headers::new();
+    headers.set("Content-Type", "text/html; charset=utf-8")?;
+    headers.set("Cache-Control", "no-store")?;
+
+    Ok(Response::builder()
+        .with_headers(headers)
+        .with_status(200)
+        .body(ResponseBody::Body(html.into_bytes())))
+}
+
+pub async fn handler_dl(req: &Request) -> Result<Response> {
+    let host = req
+        .headers()
+        .get("Host")?
+        .unwrap_or_else(|| "-".to_string());
+
+    let normal_css = include_str!("../html/tul_normal.css");
+    let mut html = String::from(include_str!("../html/tul_dl.html"));
+    html = html.replace("<!-- NORMAL_CSS -->", normal_css);
+    html = html.replace("{HOST}", &escape_html(&host));
+
+    let headers = Headers::new();
+    headers.set("Content-Type", "text/html; charset=utf-8")?;
+    headers.set("Cache-Control", "no-store")?;
+
+    Ok(Response::builder()
+        .with_headers(headers)
+        .with_status(200)
+        .body(ResponseBody::Body(html.into_bytes())))
+}
+
+pub async fn handler_s(_req: &Request) -> Result<Response> {
+    let normal_css = include_str!("../html/tul_normal.css");
+    let mut html = String::from(include_str!("../html/tul_s.html"));
+    html = html.replace("<!-- NORMAL_CSS -->", normal_css);
 
     let headers = Headers::new();
     headers.set("Content-Type", "text/html; charset=utf-8")?;
