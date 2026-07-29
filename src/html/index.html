@@ -22,6 +22,9 @@ tr:last-child td { border-bottom: none; }
 .section .arrow { color: #bbb; }
 .section .result { color: #111; }
 .section p { font-size: .85rem; color: #333; margin-bottom: 6px; }
+.cli-table td:first-child { font-family: monospace; font-size: .82rem; width: auto; color: #333; }
+.cli-table td:last-child { color: #888; width: 1%; white-space: nowrap; }
+.cli-table .cmd { color: #080; }
 </style>
 </head>
 <body>
@@ -32,7 +35,13 @@ tr:last-child td { border-bottom: none; }
 </table>
 <div class="section">
 <h2>Command Line Interfaces</h2>
-<pre><span class="cmd">$ curl {HOST}/tul_ip</span>  <span class="arrow">&rArr;</span>  <span class="result">{IP}</span></pre>
+<table class="cli-table">
+<tbody>
+<tr><td><span class="cmd">$ curl -L {HOST}/tul_ip</span></td><td>return your IP</td></tr>
+<tr><td><span class="cmd">$ curl -L {HOST}/tul_colo</span></td><td>return airport code</td></tr>
+<tr><td><span class="cmd">$ curl -L --resolve {HOST}:443:&lt;cf-edge-ip&gt; https://{HOST}/tul_colo</span></td><td>resolve CF edge node location</td></tr>
+</tbody>
+</table>
 </div>
 <div class="section">
 <h2>Tools</h2>

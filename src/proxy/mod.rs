@@ -187,6 +187,7 @@ pub async fn handler(req: Request, cx: RouteContext<()>) -> Result<Response> {
             }
         }
         "/tul_ip" => ip::handler_text(&req).await,
+        "/tul_colo" => ip::handler_colo(&req).await,
         "/tul_dl" => ip::handler_dl(&req).await,
         "/" => ip::handler_html(&req).await,
         _ => {
