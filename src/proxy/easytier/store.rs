@@ -45,39 +45,10 @@ pub fn get_network_peers(network: &str) -> Vec<(String, WebSocket)> {
         .unwrap_or_default()
 }
 
-/// Check if a network has any peers.
-pub fn has_network(network: &str) -> bool {
-    let map = PEER_MAP.lock().unwrap();
-    map.contains_key(network)
-}
-
 /// Get the count of peers in a network.
 pub fn peer_count(network: &str) -> usize {
     let map = PEER_MAP.lock().unwrap();
     map.get(network).map(|m| m.len()).unwrap_or(0)
-}
-
-/// Persist peer registration to KV for cross-worker-instance discovery.
-pub async fn persist_peer(kv: &kv::KvStore, network: &str, peer_id: &str, ws: &WebSocket) {
-    let key = format!("{}:{}", network, peer_id);
-    // Store a heartbeat timestamp. The ws reference stays in memory.
-    let timestamp = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_secs();
-    if let Err(e) = kv
-        .put(&key, &timestamp.to_string())
-        .execute()
-        .await
-    {
-        console_error!("failed to persist peer: {}", e);
-    }
-}
-
-/// Remove persisted peer from KV.
-pub async fn unpersist_peer(kv: &kv::KvStore, network: &str, peer_id: &str) {
-    let key = format!("{}:{}", network, peer_id);
-    let _ = kv.delete(&key).await;
 }
 
 /// Get list of registered peers in a network from KV.

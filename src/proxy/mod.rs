@@ -7,7 +7,6 @@ pub mod websocket;
 
 use sha2::{Digest, Sha224};
 use std::collections::HashMap;
-use std::net::Ipv4Addr;
 use tokio::sync::OnceCell;
 use worker::*;
 
@@ -26,32 +25,25 @@ static TJ_PASSWORD: OnceCell<Vec<u8>> = OnceCell::const_new();
 // trojan request path
 static TJ_PATH: OnceCell<String> = OnceCell::const_new();
 
-#[derive(Debug, Clone)]
-pub enum Address<T: AsRef<str>> {
-    Ipv4(Ipv4Addr),
-    Domain(T),
-}
-
 async fn get_or_init_env<'a>(
     cell: &'a OnceCell<String>,
-    cx: &RouteContext<()>,
+    env: &Env,
     key: &str,
     default: &str,
-) -> &'a String {
+) -> &'a str {
     cell.get_or_init(|| async {
-        cx.env
-            .var(key)
+        env.var(key)
             .map(|secret| secret.to_string()) // Secret → String
             .unwrap_or_else(|_| default.to_string())
     })
     .await
+    .as_str()
 }
 
-async fn get_trojan_path(cx: &RouteContext<()>) -> &'static String {
+async fn get_trojan_path(env: &Env) -> &'static String {
     TJ_PATH
         .get_or_init(|| async {
-            let pre = cx
-                .env
+            let pre = env
                 .secret("PREFIX")
                 .map_or("/tj".to_string(), |x| x.to_string());
             if !pre.starts_with("/") {
@@ -62,11 +54,10 @@ async fn get_trojan_path(cx: &RouteContext<()>) -> &'static String {
         .await
 }
 
-async fn get_trojan_password(cx: &RouteContext<()>) -> &'static Vec<u8> {
+async fn get_trojan_password(env: &Env) -> &'static Vec<u8> {
     TJ_PASSWORD
         .get_or_init(|| async {
-            let pw = cx
-                .env
+            let pw = env
                 .secret("PASSWORD")
                 .map_or("password".to_string(), |x| x.to_string());
             Sha224::digest(pw.as_bytes())
@@ -138,31 +129,11 @@ fn get_cookie_by_name(cookie_str: &str, key: &str) -> Option<String> {
         .map(|(_, v)| v.to_string())
 }
 
-fn build_search_url(query: &Option<HashMap<String, String>>) -> Result<(Url, &'static str)> {
-    let query = query
-        .as_ref()
-        .ok_or(Error::RustError("missing query parameter: q".into()))?;
-    let q = query.get("q").map(|s| s.trim());
-    let backend = query.get("s").map(|s| s.as_str()).unwrap_or("ddg");
-    let (host, mut url) = match backend {
-        "sp" => (
-            "www.startpage.com",
-            Url::parse("https://www.startpage.com/sp/search")?,
-        ),
-        _ => ("duckduckgo.com", Url::parse("https://duckduckgo.com/")?),
-    };
+pub async fn handler(req: Request, env: &Env) -> Result<Response> {
+    let dns_host = get_or_init_env(&DOH_HOST, env, "DOH_HOST", "dns.google").await;
+    let ech_domain = get_or_init_env(&ECH_DOMAIN, env, "ECH_DOMAIN", "linux.do").await;
 
-    url.query_pairs_mut().append_pair("q", q.unwrap_or(""));
-    Ok((url, host))
-}
-
-pub async fn handler(req: Request, cx: RouteContext<()>) -> Result<Response> {
-    let dns_host = get_or_init_env(&DOH_HOST, &cx, "DOH_HOST", "dns.google").await;
-    let ech_domain = get_or_init_env(&ECH_DOMAIN, &cx, "ECH_DOMAIN", "linux.do").await;
-
-    let query = req
-        .query()
-        .map_or(None, |q: HashMap<String, String>| Some(q));
+    let query: Option<HashMap<String, String>> = req.query().ok();
     let origin_path = req.path();
 
     match origin_path.as_str() {
@@ -175,12 +146,21 @@ pub async fn handler(req: Request, cx: RouteContext<()>) -> Result<Response> {
                 .body(ResponseBody::Body(bytes));
             Ok(new_resp)
         }
-        "/tulmcp" => mcp::handler(req, cx).await,
-        path if path.starts_with(get_trojan_path(&cx).await) => tj(req, cx).await,
+        "/tulmcp" => mcp::handler(req, env).await,
+        path if path.starts_with(get_trojan_path(env).await) => tj(req, env).await,
         path if path.starts_with("/v2") => api::image_handler(req, query).await,
         "/tul_s" => {
             if query.as_ref().and_then(|q| q.get("q")).is_some() {
-                let (url, host) = build_search_url(&query)?;
+                let q = query.as_ref().and_then(|q| q.get("q")).map(|s| s.trim());
+                let backend = query.as_ref().and_then(|q| q.get("s")).map(|s| s.as_str());
+                let (host, mut url) = match backend {
+                    Some("sp") => (
+                        "www.startpage.com",
+                        Url::parse("https://www.startpage.com/sp/search")?,
+                    ),
+                    _ => ("duckduckgo.com", Url::parse("https://duckduckgo.com/")?),
+                };
+                url.query_pairs_mut().append_pair("q", q.unwrap_or(""));
                 api::handler(req, url, host).await
             } else {
                 ip::handler_s(&req).await
@@ -200,12 +180,7 @@ pub async fn handler(req: Request, cx: RouteContext<()>) -> Result<Response> {
 
             // when not resolve, will try find domain by cookie.
             let resolve = match domain {
-                Some(d) => {
-                    d.contains('.')
-                        && dns::is_cf_address(dns_host, &Address::Domain(d))
-                            .await
-                            .is_ok()
-                }
+                Some(d) => d.contains('.') && dns::is_cf_address(dns_host, d).await.is_ok(),
                 _ => false,
             };
 
@@ -244,8 +219,9 @@ pub async fn handler(req: Request, cx: RouteContext<()>) -> Result<Response> {
     }
 }
 
-pub async fn tj(_req: Request, cx: RouteContext<()>) -> Result<Response> {
-    let dns_host = get_or_init_env(&DOH_HOST, &cx, "DOH_HOST", "dns.google").await;
+pub async fn tj(_req: Request, env: &Env) -> Result<Response> {
+    let dns_host = get_or_init_env(&DOH_HOST, env, "DOH_HOST", "dns.google").await;
+    let password = get_trojan_password(env).await;
 
     let WebSocketPair { server, client } = WebSocketPair::new()?;
     let response = Response::from_websocket(client)?;
@@ -256,7 +232,7 @@ pub async fn tj(_req: Request, cx: RouteContext<()>) -> Result<Response> {
         let events = server.events().expect("Failed to get event stream");
         let mut wsstream = websocket::WsStream::new(&server, events, None);
 
-        let result = match tj::parse(get_trojan_password(&cx).await, &mut wsstream).await {
+        let result = match tj::parse(password, &mut wsstream).await {
             Ok((hostname, port)) => {
                 let addr = match dns::is_cf_address(dns_host, &hostname).await {
                     Ok((true, _)) => {

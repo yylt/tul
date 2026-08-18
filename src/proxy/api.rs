@@ -1,53 +1,47 @@
 use super::*;
-use regex::Regex;
-use std::collections::{HashMap, HashSet};
-use tokio::sync::OnceCell;
+use std::collections::HashMap;
 
 static REGISTRY: &str = "registry-1.docker.io";
 
-static HOP_HEADERS: OnceCell<HashSet<&'static str>> = OnceCell::const_new();
-
-async fn get_hop_headers() -> &'static HashSet<&'static str> {
-    HOP_HEADERS
-        .get_or_init(|| async {
-            HashSet::from([
-                // RFC 2616 hop-by-hop
-                "connection",
-                "content-length",
-                "host",
-                "keep-alive",
-                "proxy-authenticate",
-                "proxy-authorization",
-                "referer",
-                "te",
-                "trailer",
-                "transfer-encoding",
-                "upgrade",
-                // Azure Storage signing headers
-                "x-ms-date",
-                "x-ms-version",
-                "x-ms-blob-type",
-                // Cloudflare metadata
-                "cf-connecting-ip",
-                "cf-ew-via",
-                "cf-ipcountry",
-                "cf-ray",
-                "cf-request-id",
-                "cf-visitor",
-                "cf-worker",
-                // loop prevention
-                "cdn-loop",
-                // proxy generated
-                "via",
-                "x-forwarded-for",
-                "x-forwarded-host",
-                "x-forwarded-port",
-                "x-forwarded-proto",
-                "x-forwarded-server",
-                "x-real-ip",
-            ])
-        })
-        .await
+// RFC 2616 hop-by-hop headers, proxy-generated headers, and Cloudflare metadata.
+fn is_hop_header(key: &str) -> bool {
+    matches!(
+        key,
+        // RFC 2616 hop-by-hop
+        "connection"
+            | "content-length"
+            | "host"
+            | "keep-alive"
+            | "proxy-authenticate"
+            | "proxy-authorization"
+            | "referer"
+            | "te"
+            | "trailer"
+            | "transfer-encoding"
+            | "upgrade"
+            // Azure Storage signing headers
+            | "x-ms-date"
+            | "x-ms-version"
+            | "x-ms-blob-type"
+            // Cloudflare metadata
+            | "cf-connecting-ip"
+            | "cf-ew-via"
+            | "cf-ipcountry"
+            | "cf-ray"
+            | "cf-request-id"
+            | "cf-visitor"
+            | "cf-worker"
+            // loop prevention
+            | "cdn-loop"
+            // proxy generated
+            | "via"
+            | "x-forwarded-for"
+            | "x-forwarded-host"
+            | "x-forwarded-port"
+            | "x-forwarded-proto"
+            | "x-forwarded-server"
+            | "x-real-ip"
+    )
 }
 
 fn rewrite_location(value: &str, uri: &Url, my_host: &str) -> String {
@@ -71,23 +65,8 @@ fn rewrite_location(value: &str, uri: &Url, my_host: &str) -> String {
 }
 
 fn replace_host(content: &mut str, src: &str, dest: &str) -> Result<String> {
-    let re = Regex::new(r#"(?P<attr>src|href)(?P<eq>=)(?P<quote>['"]?)(?P<url>(//|https://))"#)
-        .map_err(|_e| worker::Error::BadEncoding)?;
-
-    let result = re.replace_all(content, |caps: &regex::Captures| {
-        let attr = &caps["attr"];
-        let eq = &caps["eq"];
-        let quote = &caps["quote"];
-        let url = &caps["url"];
-
-        if url.starts_with("https://") || url.starts_with("//") {
-            format!("{}{}{}https://{}/", attr, eq, quote, dest)
-        } else {
-            caps[0].to_string()
-        }
-    });
-    Ok(result
-        .into_owned()
+    Ok(content
+        .replace("https://", &format!("https://{}/", dest))
         .replace(&format!("//{}", src), &format!("//{}/{}", dest, src)))
 }
 
@@ -114,11 +93,10 @@ pub async fn image_handler(
 
 pub async fn handler(mut req: Request, uri: Url, dst_host: &str) -> Result<Response> {
     let my_host = req.headers().get("host")?.ok_or("Host header not found")?;
-    let hops = get_hop_headers().await;
     // build request
     let req_headers = Headers::new();
     for (key, value) in req.headers().entries() {
-        if hops.contains(key.as_str()) {
+        if is_hop_header(key.as_str()) {
             continue;
         }
         req_headers.set(&key, &value)?;

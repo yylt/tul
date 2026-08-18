@@ -5,7 +5,7 @@ use tokio::io::{AsyncRead, AsyncReadExt};
 pub async fn parse<R: AsyncRead + Unpin>(
     pw_hash: &Vec<u8>,
     stream: &mut R,
-) -> std::io::Result<(super::Address<String>, u16)> {
+) -> std::io::Result<(String, u16)> {
     let mut password_hash = [0u8; 56];
     stream.read_exact(&mut password_hash).await?;
     if password_hash != pw_hash.as_slice() {
@@ -38,7 +38,7 @@ pub async fn parse<R: AsyncRead + Unpin>(
 
     // Get address size and address object
     let host = match atype {
-        1 => super::Address::Ipv4(Ipv4Addr::from(stream.read_u32().await?)),
+        1 => Ipv4Addr::from(stream.read_u32().await?).to_string(),
         3 => {
             // Read domain name size
             let size = stream.read_u8().await? as usize;
@@ -46,10 +46,8 @@ pub async fn parse<R: AsyncRead + Unpin>(
             // Read domain name context
             let mut domain_buf = vec![0u8; size];
             stream.read_exact(&mut domain_buf).await?;
-            super::Address::Domain(
-                String::from_utf8(domain_buf)
-                    .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?,
-            )
+            String::from_utf8(domain_buf)
+                .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?
         }
         _ => {
             return Err(std::io::Error::new(
