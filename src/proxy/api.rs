@@ -3,6 +3,10 @@ use std::collections::HashMap;
 
 static REGISTRY: &str = "registry-1.docker.io";
 
+// Rewriting the body costs a full buffer + string scan; skip bodies (HTML or
+// JS) larger than this.
+const MAX_REWRITE_BODY: usize = 2 * 1024 * 1024;
+
 // RFC 2616 hop-by-hop headers, proxy-generated headers, and Cloudflare metadata.
 fn is_hop_header(key: &str) -> bool {
     matches!(
@@ -85,13 +89,19 @@ pub async fn image_handler(
 
     let full_url = format!("https://{}{}", domain, req_url.path());
     if let Ok(url) = Url::parse(&full_url) {
-        handler(req, url, domain).await
+        // registry proxy: no JS body rewriting
+        handler(req, url, domain, false).await
     } else {
         Response::error("Not Found", 404)
     }
 }
 
-pub async fn handler(mut req: Request, uri: Url, dst_host: &str) -> Result<Response> {
+pub async fn handler(
+    mut req: Request,
+    uri: Url,
+    dst_host: &str,
+    rewrite_js: bool,
+) -> Result<Response> {
     let my_host = req.headers().get("host")?.ok_or("Host header not found")?;
     // build request
     let req_headers = Headers::new();
@@ -135,10 +145,22 @@ pub async fn handler(mut req: Request, uri: Url, dst_host: &str) -> Result<Respo
     resp_header.delete("content-security-policy")?;
     resp_header.set("access-control-allow-origin", "*")?;
 
-    if resp_header
-        .get("content-type")?
-        .is_some_and(|ct| ct.contains("text/html"))
-    {
+    let content_type = resp_header.get("content-type")?;
+    let is_html = content_type
+        .as_deref()
+        .is_some_and(|ct| ct.contains("text/html"));
+    let is_js = rewrite_js
+        && content_type
+            .as_deref()
+            .is_some_and(|ct| ct.contains("javascript"));
+    // Rewriting buffers the whole body; skip HTML/JS bodies that are already
+    // large by upstream content-length. Missing length defaults to rewriting.
+    let too_large = resp_header
+        .get("content-length")?
+        .and_then(|len| len.parse::<usize>().ok())
+        .is_some_and(|len| len > MAX_REWRITE_BODY);
+
+    if (is_html || is_js) && !too_large {
         resp_header.delete("content-encoding")?;
         resp_header.set(
             "set-cookie",

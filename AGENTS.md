@@ -125,6 +125,7 @@ Forward query to upstream → parse HTTPS (type 65) record → if no ECH and all
 - `PREFIX` — Trojan WS path (default: `/tj`)
 - `DOH_HOST` — upstream DoH (default: `dns.google`)
 - `ECH_DOMAIN` — ECH record source (default: `linux.do`)
+- `REWRITE_JS` — rewrite JS response bodies (`1`/`true`/`yes`/`on` enables; default: disabled)
 
 **Build**: `opt-level = "z"`, `lto = true`, `strip = true`, `codegen-units = 1`
 
