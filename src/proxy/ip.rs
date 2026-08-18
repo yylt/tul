@@ -11,6 +11,18 @@ pub async fn handler_text(req: &Request) -> Result<Response> {
         .body(ResponseBody::Body(ip.into_bytes())))
 }
 
+pub async fn handler_colo(req: &Request) -> Result<Response> {
+    let colo = req
+        .cf()
+        .map(|cf| cf.colo())
+        .unwrap_or_else(|| "unknown".to_string());
+
+    Ok(Response::builder()
+        .with_status(200)
+        .with_header("Content-Type", "text/plain; charset=utf-8")?
+        .body(ResponseBody::Body(colo.into_bytes())))
+}
+
 pub async fn handler_html(req: &Request) -> Result<Response> {
     let ip = req
         .headers()
