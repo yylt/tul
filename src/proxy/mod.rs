@@ -19,6 +19,9 @@ static DOH_HOST: OnceCell<String> = OnceCell::const_new();
 // cookie destination address key.
 static COOKIE_HOST_KEY: &str = "tul_host";
 
+// rewrite JS body switch (REWRITE_JS secret, truthy value enables)
+static REWRITE_JS: OnceCell<bool> = OnceCell::const_new();
+
 // trojan password hash
 static TJ_PASSWORD: OnceCell<Vec<u8>> = OnceCell::const_new();
 
@@ -66,6 +69,19 @@ async fn get_trojan_password(env: &Env) -> &'static Vec<u8> {
                 .collect::<String>()
                 .as_bytes()
                 .to_vec()
+        })
+        .await
+}
+
+async fn get_rewrite_js(env: &Env) -> &'static bool {
+    REWRITE_JS
+        .get_or_init(|| async {
+            env.secret("REWRITE_JS").is_ok_and(|v| {
+                matches!(
+                    v.to_string().to_ascii_lowercase().as_str(),
+                    "1" | "true" | "yes" | "on"
+                )
+            })
         })
         .await
 }
@@ -161,7 +177,8 @@ pub async fn handler(req: Request, env: &Env) -> Result<Response> {
                     _ => ("duckduckgo.com", Url::parse("https://duckduckgo.com/")?),
                 };
                 url.query_pairs_mut().append_pair("q", q.unwrap_or(""));
-                api::handler(req, url, host).await
+                // search proxy: no JS body rewriting
+                api::handler(req, url, host, false).await
             } else {
                 ip::handler_s(&req).await
             }
@@ -215,7 +232,7 @@ pub async fn handler(req: Request, env: &Env) -> Result<Response> {
                 url.push('?');
                 url.push_str(raw_query);
             }
-            api::handler(req, Url::parse(&url)?, host).await
+            api::handler(req, Url::parse(&url)?, host, *get_rewrite_js(env).await).await
         }
     }
 }
