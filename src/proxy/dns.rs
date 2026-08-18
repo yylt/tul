@@ -80,9 +80,6 @@ fn skip_name(bytes: &[u8], mut pos: usize) -> Result<usize> {
     while pos < bytes.len() {
         let label_len = bytes[pos];
         if label_len & 0xC0 == 0xC0 {
-            if pos + 1 >= bytes.len() {
-                return Err(Error::RustError("Truncated pointer".into()));
-            }
             pos += 2;
             break;
         } else if label_len == 0 {
@@ -362,20 +359,12 @@ pub async fn doh_query(domain: &str, qtype: u16, resolver: &str) -> Result<Vec<u
     Fetch::Request(req).send().await?.bytes().await
 }
 
-pub async fn resolve_a(domain: &str, resolver: &str) -> Result<Ipv4Addr> {
-    let resp_bytes = doh_query(domain, QTYPE_A, resolver).await?;
-    extract_ipv4_from_response(&resp_bytes)
-}
-
 pub async fn is_cf_address(
     resolve: impl AsRef<str>,
-    addr: &Address<impl AsRef<str>>,
+    domain: impl AsRef<str>,
 ) -> Result<(bool, Ipv4Addr)> {
-    let ip = match addr {
-        Address::Ipv4(ip) => *ip,
-        Address::Domain(domain) => resolve_a(domain.as_ref(), resolve.as_ref()).await?,
-    };
-
+    let resp_bytes = doh_query(domain.as_ref(), QTYPE_A, resolve.as_ref()).await?;
+    let ip = extract_ipv4_from_response(&resp_bytes)?;
     Ok((is_cloudflare_ip(ip), ip))
 }
 

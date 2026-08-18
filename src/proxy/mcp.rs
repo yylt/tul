@@ -57,7 +57,7 @@ pub async fn calltool(mut req: Request) -> Result<Response> {
     }
 }
 
-pub async fn handler(req: Request, _cx: RouteContext<()>) -> Result<Response> {
+pub async fn handler(req: Request, _env: &Env) -> Result<Response> {
     match req.method() {
         Method::Post => calltool(req).await,
         _ => listtool().await,
