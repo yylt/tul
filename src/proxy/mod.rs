@@ -147,7 +147,7 @@ fn get_cookie_by_name(cookie_str: &str, key: &str) -> Option<String> {
 
 pub async fn handler(req: Request, env: &Env) -> Result<Response> {
     let dns_host = get_or_init_env(&DOH_HOST, env, "DOH_HOST", "dns.google").await;
-    let ech_domain = get_or_init_env(&ECH_DOMAIN, env, "ECH_DOMAIN", "linux.do").await;
+    let ech_domain = get_or_init_env(&ECH_DOMAIN, env, "ECH_DOMAIN", "v2ex.com").await;
 
     let query: Option<HashMap<String, String>> = req.query().ok();
     let origin_path = req.path();
