@@ -1,6 +1,7 @@
 use worker::*;
 
 mod proxy;
+#[cfg(feature = "tul_cv")]
 mod tools;
 
 #[event(fetch)]

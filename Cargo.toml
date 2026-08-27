@@ -11,6 +11,13 @@ homepage = "https://github.com/yylt/tul"
 [lib]
 crate-type = ["cdylib"]
 
+# tul_cv: browser-side converter tools (/tul_cv page + embedded WASM assets).
+# Disabled by default; enable with `--features tul_cv` (and run `make cv-wasm`
+# first to generate src/html/tul_cv_* assets).
+[features]
+default = []
+tul_cv = []
+
 [dependencies]
 worker = { version = "0.8.5", features = ["http"], default-features = false }
 futures-util = { version = "0.3.32", default-features = false }

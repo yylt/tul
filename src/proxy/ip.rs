@@ -94,6 +94,13 @@ pub async fn handler_html(req: &Request) -> Result<Response> {
     let mut html = String::from(include_str!("../html/index.html"));
     html = html.replace("<!-- NORMAL_CSS -->", normal_css);
 
+    // CV Tools entry is only shown when the tul_cv feature is compiled in.
+    #[cfg(feature = "tul_cv")]
+    let cv_tools = r#"<p><a href="/tul_cv" data-i18n="tool_cv_name">CV Tools</a> <span data-i18n="tool_cv_desc">&mdash; browser-side converters (image / text / unit)</span></p>"#;
+    #[cfg(not(feature = "tul_cv"))]
+    let cv_tools = "";
+    html = html.replace("<!-- CV_TOOLS -->", cv_tools);
+
     let mut table_rows = String::new();
     for (label, i18n_key, value) in &rows {
         let value_html = if *i18n_key == "row_colo" {

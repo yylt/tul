@@ -186,7 +186,9 @@ pub async fn handler(req: Request, env: &Env) -> Result<Response> {
         "/tul_ip" => ip::handler_text(&req).await,
         "/tul_colo" => ip::handler_colo(&req).await,
         "/tul_dl" => ip::handler_dl(&req).await,
+        #[cfg(feature = "tul_cv")]
         "/tul_cv" => crate::tools::cv::handler(&req).await,
+        #[cfg(feature = "tul_cv")]
         path if path.starts_with("/tul_cv/") => crate::tools::cv::asset_handler(&req).await,
         "/" => ip::handler_html(&req).await,
         _ => {
