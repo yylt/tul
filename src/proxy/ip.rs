@@ -75,19 +75,19 @@ pub async fn handler_html(req: &Request) -> Result<Response> {
         .unwrap_or_else(|| "-".to_string());
 
     let rows = [
-        ("IP Address", ip.clone()),
-        ("Country", cf_country.clone()),
-        ("City", cf_city.clone()),
-        ("Colo", colo.clone()),
-        ("X-Real-IP", x_real_ip.clone()),
-        ("X-Forwarded-For", xff.clone()),
-        ("User Agent", ua.clone()),
-        ("Language", lang.clone()),
-        ("Referer", referer.clone()),
-        ("Host", host.clone()),
-        ("Method", method.clone()),
-        ("Encoding", encoding.clone()),
-        ("MIME Type", mime.clone()),
+        ("IP Address", "row_ip", ip.clone()),
+        ("Country", "row_country", cf_country.clone()),
+        ("City", "row_city", cf_city.clone()),
+        ("Colo", "row_colo", colo.clone()),
+        ("X-Real-IP", "row_xreal", x_real_ip.clone()),
+        ("X-Forwarded-For", "row_xff", xff.clone()),
+        ("User Agent", "row_ua", ua.clone()),
+        ("Language", "row_lang", lang.clone()),
+        ("Referer", "row_referer", referer.clone()),
+        ("Host", "row_host", host.clone()),
+        ("Method", "row_method", method.clone()),
+        ("Encoding", "row_encoding", encoding.clone()),
+        ("MIME Type", "row_mime", mime.clone()),
     ];
 
     let normal_css = include_str!("../html/tul_normal.css");
@@ -95,8 +95,8 @@ pub async fn handler_html(req: &Request) -> Result<Response> {
     html = html.replace("<!-- NORMAL_CSS -->", normal_css);
 
     let mut table_rows = String::new();
-    for (label, value) in &rows {
-        let value_html = if *label == "Colo" {
+    for (label, i18n_key, value) in &rows {
+        let value_html = if *i18n_key == "row_colo" {
             format!(
                 r#"<a href="https://www.iata.org/en/publications/directories/code-search/?airport.search={}" title="IATA airport code">{}</a>"#,
                 escape_html(value),
@@ -106,7 +106,8 @@ pub async fn handler_html(req: &Request) -> Result<Response> {
             escape_html(value)
         };
         table_rows.push_str(&format!(
-            "<tr><td>{}</td><td>{}</td></tr>",
+            "<tr><td data-i18n=\"{}\">{}</td><td>{}</td></tr>",
+            i18n_key,
             escape_html(label),
             value_html
         ));

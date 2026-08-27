@@ -325,27 +325,43 @@ wasm-opt -Oz pkg/tul_cv_bg.wasm -o pkg/tul_cv_bg.wasm
 ## 实施计划
 
 ### Phase 1: 基础设施
-- [ ] 创建 `tul-cv-wasm` 独立项目，配置 `wasm-pack`
-- [ ] 搭建基本 UI（`cv.html`：搜索框 + tab + 卡片网格）
-- [ ] 实现 image crate 核心转换（PNG↔JPEG↔WebP）
-- [ ] 在 tul 中注册 `/tul_cv` 路由
+- [x] 创建 `tul-cv-wasm` 独立项目，配置 `wasm-pack`（实际用 `cargo build + wasm-bindgen --target web`）
+- [x] 搭建基本 UI（`cv.html`：搜索框 + tab + 卡片网格）
+- [x] 实现 image crate 核心转换（PNG↔JPEG↔WebP）
+- [x] 在 tul 中注册 `/tul_cv` 路由
 
 ### Phase 2: 核心能力
-- [ ] 图像缩放、裁剪
-- [ ] 水印叠加
-- [ ] 文本编码转换
-- [ ] JSON 格式化/压缩
-- [ ] Markdown→HTML
-- [ ] 单位转换
+- [x] 图像缩放、裁剪
+- [x] 水印叠加（font8x8 8x8 位图字体，无字体资产）
+- [x] 文本编码转换
+- [x] JSON 格式化/压缩
+- [x] Markdown→HTML
+- [x] 单位转换
 
 ### Phase 3: 文档类
-- [ ] 文本→PDF
-- [ ] Excel→CSV/JSON
-- [ ] 生成 Word
-- [ ] CSV→JSON
+- [x] 文本→PDF
+- [x] Excel→CSV/JSON
+- [x] 生成 Word
+- [x] CSV→JSON
 
 ### Phase 4: 进阶 & 分发
-- [ ] SVG→PNG（可选）
-- [ ] PDF 文本提取（可选）
-- [ ] OCR（可选，如方案可行）
-- [ ] 发布 WASM 到 JS 仓库，配置 CDN 分发
+- [ ] SVG→PNG（可选，resvg 体积大，暂缓）
+- [ ] PDF 文本提取（可选，lopdf 体积大，暂缓）
+- [ ] OCR（可选，浏览器原生 API 未标准化，暂缓）
+- [ ] 发布 WASM 到 JS 仓库，配置 CDN 分发（当前由 Worker 直接内嵌分发）
+
+## 实施记录（与提案的差异）
+
+1. **WASM 体积控制（code splitting 落地）**：完整构建约 2MB（gzip 800KB）。
+   按提案"考虑按功能拆分为多个小 WASM，按需加载"拆分：
+   - `tul_cv_wasm_bg.wasm`（core，约 1.1MB / gzip 478KB）：图像、文本、PDF、单位转换
+   - `tul_cv_office_wasm_bg.wasm`（office，约 987KB / gzip 443KB）：Excel 解析、Word 生成，
+     仅当打开对应工具时才动态 `import()` 加载
+2. **WebP 编码**：`image` 0.25 仅支持 lossless WebP 编码，质量参数忽略。
+3. **构建工具**：未用 `wasm-pack`，直接 `cargo build --release --target wasm32-unknown-unknown`
+   + `wasm-bindgen --target web --no-typescript`（需与 Cargo.toml 中 wasm-bindgen 版本匹配的 CLI）。
+4. **水印字体**：使用 `font8x8`（内置 8x8 位图 ASCII 字形）替代 `imageproc + rusttype`，
+   避免字体资产与体积开销。
+5. **分发**：构建产物复制到 `src/html/`，由 Worker `include_bytes!` 内嵌分发
+   （`/tul_cv/tul_cv_wasm.js`、`/tul_cv/tul_cv_wasm_bg.wasm`、`/tul_cv/tul_cv_office_wasm.js`、
+   `/tul_cv/tul_cv_office_wasm_bg.wasm`）。CDN 分发留待 Phase 4。

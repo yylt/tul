@@ -21,7 +21,7 @@ init: ## 初始化项目（安装依赖）
 	npm install -g wrangler
 
 .PHONY: build
-build: ## 构建项目（生成 WebAssembly 目标）
+build: cv-wasm ## 构建项目（生成 WebAssembly 目标）
 	@printf "${GREEN}构建项目...${NC}\n"
 	cargo build --target wasm32-unknown-unknown --release
 
@@ -106,3 +106,42 @@ ci: fmt-check lint test ## CI 流程（格式化检查、Clippy、测试）
 .PHONY: pre-commit
 pre-commit: fmt lint test ## 提交前运行所有检查（格式化、Clippy、测试）
 	@printf "${GREEN}所有检查通过！${NC}\n"
+
+# ---- tul-cv-wasm (browser-side tools) ----
+
+CV_WASM_DIR := tul-cv-wasm
+CV_CORE := $(CV_WASM_DIR)/pkg/tul_cv_wasm.js $(CV_WASM_DIR)/pkg/tul_cv_wasm_bg.wasm
+CV_OFFICE := $(CV_WASM_DIR)/office/pkg/tul_cv_office_wasm.js $(CV_WASM_DIR)/office/pkg/tul_cv_office_wasm_bg.wasm
+
+.PHONY: cv-wasm
+cv-wasm: cv-wasm-core cv-wasm-office ## 构建 tul-cv WASM 模块并复制到 src/html
+
+.PHONY: cv-wasm-core
+cv-wasm-core: $(CV_CORE)
+
+$(CV_CORE): $(shell find $(CV_WASM_DIR)/src -name '*.rs') $(CV_WASM_DIR)/Cargo.toml
+	@printf "${GREEN}构建 tul-cv WASM (core)...${NC}\n"
+	cd $(CV_WASM_DIR) && cargo build --release --target wasm32-unknown-unknown
+	cd $(CV_WASM_DIR) && wasm-bindgen target/wasm32-unknown-unknown/release/tul_cv_wasm.wasm \
+		--out-dir pkg --target web --no-typescript
+	cp $(CV_CORE) src/html/
+
+.PHONY: cv-wasm-office
+cv-wasm-office: $(CV_OFFICE)
+
+$(CV_OFFICE): $(shell find $(CV_WASM_DIR)/office/src -name '*.rs') $(CV_WASM_DIR)/office/Cargo.toml
+	@printf "${GREEN}构建 tul-cv WASM (office)...${NC}\n"
+	cd $(CV_WASM_DIR)/office && cargo build --release --target wasm32-unknown-unknown
+	cd $(CV_WASM_DIR)/office && wasm-bindgen target/wasm32-unknown-unknown/release/tul_cv_office_wasm.wasm \
+		--out-dir pkg --target web --no-typescript
+	cp $(CV_OFFICE) ../src/html/
+
+.PHONY: cv-test
+cv-test: ## 运行 tul-cv WASM 的宿主单元测试
+	cd $(CV_WASM_DIR) && cargo test
+
+.PHONY: cv-clean
+cv-clean: ## 清理 tul-cv WASM 构建产物
+	rm -rf $(CV_WASM_DIR)/pkg $(CV_WASM_DIR)/target $(CV_WASM_DIR)/office/pkg $(CV_WASM_DIR)/office/target
+	rm -f src/html/tul_cv_wasm.js src/html/tul_cv_wasm_bg.wasm
+	rm -f src/html/tul_cv_office_wasm.js src/html/tul_cv_office_wasm_bg.wasm

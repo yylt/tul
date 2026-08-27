@@ -1,0 +1,40 @@
+[package]
+name = "tul-cv-wasm"
+version = "0.1.0"
+edition = "2021"
+description = "Client-side WASM tools for /tul_cv (image/text/unit conversion)"
+license = "MIT"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+wasm-bindgen = "0.2.127"
+
+# image: only png/jpeg/webp codecs, no default features
+image = { version = "0.25.10", default-features = false, features = ["png", "jpeg", "webp"] }
+
+# fonts + raster text rendering for watermark / text-to-image / PDF pages
+font8x8 = "0.3.1"
+
+# PDF generation (pure Rust)
+pdf-writer = "0.15.0"
+
+# text
+# pulldown-cmark without getopts (the CLI feature is only for the binary)
+pulldown-cmark = { version = "0.13.4", default-features = false, features = ["html"] }
+csv = "1.4.0"
+encoding_rs = "0.8.35"
+base64 = "0.23.1"
+serde_json = "1"
+
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
+
+[profile.dev]
+opt-level = 2
