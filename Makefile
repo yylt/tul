@@ -21,28 +21,43 @@ init: ## 初始化项目（安装依赖）
 	npm install -g wrangler
 
 .PHONY: build
-build: ## 构建项目（生成 WebAssembly 目标）
+build: ## 构建项目（生成 WebAssembly 目标，默认不含 tul_cv）
 	@printf "${GREEN}构建项目...${NC}\n"
 	cargo build --target wasm32-unknown-unknown --release
 
+.PHONY: build-cv
+build-cv: cv-wasm ## 构建含 tul_cv 功能的 Worker（先生成 WASM 资产）
+	@printf "${GREEN}构建项目（tul_cv 功能）...${NC}\n"
+	cargo build --target wasm32-unknown-unknown --release --features tul_cv
+
 .PHONY: deploy
-deploy: build ## 部署到 Cloudflare Workers（依赖 build）
+deploy: build ## 部署到 Cloudflare Workers（依赖 build，默认不含 tul_cv）
 	@printf "${GREEN}部署到 Cloudflare Workers...${NC}\n"
 	@ npx wrangler deploy
 
+.PHONY: deploy-cv
+deploy-cv: build-cv ## 部署到 Cloudflare Workers（含 tul_cv 功能）
+	@printf "${GREEN}部署到 Cloudflare Workers（tul_cv 功能）...${NC}\n"
+	@ TUL_CV_FEATURES=tul_cv npx wrangler deploy
+
 .PHONY: dev
-dev: ## 本地开发运行
+dev: ## 启动本地开发服务器（默认不含 tul_cv）
 	@printf "${GREEN}启动本地开发服务器...${NC}\n"
 	@ npx wrangler dev -c .wrangler.dev.toml
 
+.PHONY: dev-cv
+dev-cv: cv-wasm ## 启动本地开发服务器（含 tul_cv 功能，需先生成 WASM 资产）
+	@printf "${GREEN}启动本地开发服务器（tul_cv 功能）...${NC}\n"
+	@ TUL_CV_FEATURES=tul_cv npx wrangler dev -c .wrangler.dev.toml
+
 .PHONY: lint
-lint: ## 运行 Clippy 检查
-	cargo clippy --all-targets --all-features -- -D warnings
+lint: ## 运行 Clippy 检查（默认 feature；tul_cv 需要先生成 src/html 资产）
+	cargo clippy --all-targets -- -D warnings
 
 .PHONY: lint-fix
-lint-fix: ## 自动修复 Clippy 警告
+lint-fix: ## 自动修复 Clippy 警告（默认 feature；tul_cv 需要先生成 src/html 资产）
 	@printf "${GREEN}自动修复 Clippy 警告...${NC}\n"
-	cargo clippy --all-targets --all-features --fix --allow-dirty
+	cargo clippy --all-targets --fix --allow-dirty
 
 .PHONY: fmt
 fmt: ## 格式化代码
@@ -100,9 +115,40 @@ secret-delete: ## 删除 secret（使用方式：make secret-delete NAME=SECRET_
 
 # 组合命令
 .PHONY: ci
-ci: fmt-check lint test ## CI 流程（格式化检查、Clippy、测试）
+ci: fmt-check lint test cv-test ## CI 流程（格式化检查、Clippy、测试）
 	@printf "${GREEN}CI 检查通过！${NC}\n"
 
 .PHONY: pre-commit
 pre-commit: fmt lint test ## 提交前运行所有检查（格式化、Clippy、测试）
 	@printf "${GREEN}所有检查通过！${NC}\n"
+
+# ---- tul-cv-wasm (browser-side tools) ----
+
+CV_WASM_DIR := tul-cv-wasm
+CV_CORE := $(CV_WASM_DIR)/pkg/tul_cv_wasm.js $(CV_WASM_DIR)/pkg/tul_cv_wasm_bg.wasm
+CV_OFFICE := $(CV_WASM_DIR)/office/pkg/tul_cv_office_wasm.js $(CV_WASM_DIR)/office/pkg/tul_cv_office_wasm_bg.wasm
+
+.PHONY: cv-wasm
+cv-wasm: ## 构建 tul-cv WASM 模块并复制到 src/html（总是重新复制）
+	@printf "${GREEN}构建 tul-cv WASM (core)...${NC}\n"
+	cd $(CV_WASM_DIR) && cargo build --release --target wasm32-unknown-unknown
+	cd $(CV_WASM_DIR) && wasm-bindgen target/wasm32-unknown-unknown/release/tul_cv_wasm.wasm \
+		--out-dir pkg --target web --no-typescript
+	cp $(abspath $(CV_CORE)) $(CURDIR)/src/html/
+	@printf "${GREEN}构建 tul-cv WASM (office)...${NC}\n"
+	cd $(CV_WASM_DIR)/office && cargo build --release --target wasm32-unknown-unknown
+	cd $(CV_WASM_DIR)/office && wasm-bindgen target/wasm32-unknown-unknown/release/tul_cv_office_wasm.wasm \
+		--out-dir pkg --target web --no-typescript
+	cp $(abspath $(CV_OFFICE)) $(CURDIR)/src/html/
+	@printf "${GREEN}tul-cv WASM 已复制到 src/html${NC}\n"
+
+.PHONY: cv-test
+cv-test: ## 运行 tul-cv WASM 的宿主单元测试
+	cd $(CV_WASM_DIR) && cargo test
+	cd $(CV_WASM_DIR)/office && cargo test
+
+.PHONY: cv-clean
+cv-clean: ## 清理 tul-cv WASM 构建产物
+	rm -rf $(CV_WASM_DIR)/pkg $(CV_WASM_DIR)/target $(CV_WASM_DIR)/office/pkg $(CV_WASM_DIR)/office/target
+	rm -f src/html/tul_cv_wasm.js src/html/tul_cv_wasm_bg.wasm
+	rm -f src/html/tul_cv_office_wasm.js src/html/tul_cv_office_wasm_bg.wasm

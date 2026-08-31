@@ -107,7 +107,7 @@ https://{worker-domain}/tul_s?q=rust&s=sp
 - 未传 `s` 或传入未知值时，默认使用 `ddg`
 
 ### 首页展示
-访问首页 `/` 查看当前连接详情（IP、国家、城市、数据中心、Colo、UA、语言等）及所有可用 Tools 入口（下载加速器、搜索、MCP Server），`/tul_ip` 纯文本返回公网 IP。
+访问首页 `/` 查看当前连接详情（IP、国家、城市、数据中心、Colo、UA、语言等）及所有可用 Tools 入口（下载加速器、搜索、MCP Server、CV 工具），`/tul_ip` 纯文本返回公网 IP。
 
 ```bash
 # 获取纯文本公网 IP
@@ -116,6 +116,34 @@ curl https://{worker-domain}/tul_ip
 # 浏览器访问首页查看详细信息
 open https://{worker-domain}/
 ```
+
+### CV 工具页（/tul_cv）
+纯前端 WASM 工具页，浏览器本地完成图像转换、文本处理、单位转换，Worker 仅分发静态页面与 WASM 二进制。
+
+> **注意**：`tul_cv` 是 **Cargo feature，默认关闭**。需显式启用才会编译并注册 `/tul_cv` 路由、内嵌 WASM 资产。
+
+```bash
+# 浏览器打开（需先按下面启用 tul_cv 功能并部署）
+open https://{worker-domain}/tul_cv
+```
+
+- 图像：PNG/JPEG/WebP 互转、缩放、裁剪、文字水印、文字→PNG
+- 文本：文本→PDF、文本→Word、Base64/Hex/GBK 编码转换、JSON 格式化/压缩、Markdown→HTML、行去重/排序、CSV→JSON、Excel→CSV/JSON
+- 单位：长度、重量、温度、面积、体积、速度、数据大小、时间
+
+启用与构建（详见 `tul-cv-wasm/`）：
+
+```bash
+make cv-wasm       # 构建两个 WASM 模块并复制到 src/html（生成被 gitignore 的资产）
+make cv-test       # 运行宿主单元测试
+make build-cv      # 构建含 tul_cv 功能的 Worker
+make dev-cv        # 本地开发（含 tul_cv）
+make deploy-cv     # 部署（含 tul_cv）
+
+# 默认（不含 tul_cv）：make build / make dev / make deploy
+```
+
+GitHub Actions 部署时通过 `workflow_dispatch` 输入 `enable_tul_cv` 控制是否启用。
 
 ### 镜像仓库模式
 代理 docker.io 拉取镜像请求

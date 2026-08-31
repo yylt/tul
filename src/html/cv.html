@@ -1,0 +1,816 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CV Tools</title>
+<style>
+<!-- NORMAL_CSS -->
+body { align-items: flex-start; justify-content: center; padding-top: 40px; }
+.container { max-width: 720px; width: 100%; }
+.topbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; }
+.topbar h1 { font-size: 1.05rem; color: #333; font-weight: 500; margin: 0; }
+.search-row { display: flex; gap: 8px; margin-bottom: 16px; }
+.search-row input { flex: 1; }
+.tabs { display: flex; gap: 8px; margin-bottom: 20px; flex-wrap: wrap; }
+.tab { border: 1px solid #e5e5e5; border-radius: 999px; background: #fff; color: #666; font-family: inherit; font-size: .84rem; padding: 6px 18px; cursor: pointer; transition: all .15s; }
+.tab:hover { border-color: #aaa; color: #333; }
+.tab.active { background: #333; border-color: #333; color: #fff; }
+
+/* flat list layout */
+.tool-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 28px; }
+.tool-item { border: 1px solid #e8e8e8; border-radius: 10px; background: #fff; overflow: hidden; transition: border-color .15s; }
+.tool-item:hover { border-color: #bbb; }
+.tool-head { display: flex; align-items: center; gap: 14px; width: 100%; padding: 14px 16px; background: none; border: none; cursor: pointer; text-align: left; font-family: inherit; }
+.tool-head:hover { background: #f7f7f7; }
+.tool-item.open .tool-head { background: #f5f5f5; }
+.tool-head .icon { font-size: 1.2rem; width: 28px; text-align: center; flex-shrink: 0; }
+.tool-meta { flex: 1; min-width: 0; }
+.tool-meta .name { display: block; font-size: .9rem; color: #222; font-weight: 500; }
+.tool-meta .desc { display: block; font-size: .78rem; color: #999; margin-top: 2px; }
+.chev { color: #bbb; font-size: .8rem; transition: transform .18s; flex-shrink: 0; }
+.tool-item.open .chev { transform: rotate(90deg); color: #666; }
+.tool-body { border-top: 1px solid #eee; padding: 18px; display: none; }
+.tool-item.open .tool-body { display: block; }
+.empty { text-align: center; color: #aaa; font-size: .88rem; padding: 40px 0; }
+
+/* tool panel form */
+.panel h2 { font-size: .95rem; color: #222; font-weight: 500; margin: 0 0 4px; }
+.panel .sub { font-size: .8rem; color: #999; margin: 0 0 16px; }
+.panel .field { margin-bottom: 14px; }
+.panel label { display: block; font-size: .82rem; color: #666; margin-bottom: 6px; }
+.panel textarea { width: 100%; border: 1px solid #e5e5e5; border-radius: 6px; font-family: inherit; font-size: .85rem; padding: 10px 12px; outline: none; min-height: 130px; resize: vertical; background: #fcfcfc; }
+.panel textarea:focus { border-color: #999; background: #fff; }
+.panel input[type=text], .panel input[type=number], .panel select { border: 1px solid #e5e5e5; border-radius: 6px; font-family: inherit; font-size: .85rem; padding: 8px 10px; outline: none; background: #fff; }
+.panel input:focus, .panel select:focus { border-color: #999; }
+.panel .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.panel .row label { margin-bottom: 0; }
+.dropzone { border: 2px dashed #ddd; border-radius: 8px; padding: 22px; text-align: center; color: #999; font-size: .85rem; cursor: pointer; transition: border-color .15s, background .15s; }
+.dropzone:hover, .dropzone.over { border-color: #999; background: #f7f7f7; }
+.dropzone .fname { color: #333; margin-top: 8px; word-break: break-all; }
+
+.result { margin-top: 14px; }
+.result .lbl { font-size: .78rem; color: #999; display: block; margin: 14px 0 4px; }
+.result .preview { max-width: 100%; max-height: 280px; border: 1px solid #eee; border-radius: 6px; display: block; margin: 0 0 8px; }
+.result .meta { font-size: .8rem; color: #888; margin-bottom: 10px; }
+.result .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.result .out { width: 100%; min-height: 150px; }
+.err { color: #c33; font-size: .85rem; margin-top: 10px; }
+.back { text-align: center; font-size: .82rem; margin: 28px 0 40px; }
+</style>
+</head>
+<body>
+<div class="container">
+<div class="topbar">
+<h1 data-i18n="title">CV Tools</h1>
+<button id="lang" class="lang-btn">中文</button>
+</div>
+
+<div class="search-row">
+<input id="search" type="text" data-i18n-ph="search" placeholder="search tools..." autocomplete="off">
+</div>
+
+<div class="tabs" id="tabs">
+<button class="tab active" data-tab="all" data-i18n="tab_all">All</button>
+<button class="tab" data-tab="image" data-i18n="tab_image">Image</button>
+<button class="tab" data-tab="text" data-i18n="tab_text">Text</button>
+<button class="tab" data-tab="unit" data-i18n="tab_unit">Unit</button>
+</div>
+
+<div class="tool-list" id="list"></div>
+
+<p class="back"><a href="/" data-i18n="back">&larr; Back to Home</a></p>
+</div>
+
+<script type="module">
+import init, {
+  convert_to_jpeg, convert_to_png, convert_to_webp,
+  resize_image, crop_image, add_text_watermark, text_to_image,
+  text_to_pdf,
+  markdown_to_html, json_format, json_minify, csv_to_json,
+  to_base64, from_base64, to_hex, from_hex, utf8_to_gbk, gbk_to_utf8,
+  dedupe_lines, sort_lines, convert_unit
+} from '/tul_cv/tul_cv_wasm.js';
+
+let wasmReady = false;
+const ready = init().then(() => { wasmReady = true; }).catch(e => {
+  document.getElementById('list').insertAdjacentHTML('beforeend', '<p class="err">WASM load failed: ' + e + '</p>');
+});
+
+// office module is loaded lazily (only when an office tool is opened)
+let officeApi = null;
+async function loadOffice() {
+  if (officeApi) return officeApi;
+  const mod = await import('/tul_cv/tul_cv_office_wasm.js');
+  await mod.default();
+  officeApi = mod;
+  return officeApi;
+}
+
+// ---- i18n -----------------------------------------------------------------
+
+const I18N = {
+  zh: {
+    title: 'CV 工具',
+    search: '搜索工具（如 png、json、pdf）...',
+    tab_all: '全部', tab_image: '图像', tab_text: '文本', tab_unit: '单位',
+    empty: '没有匹配的工具',
+    back: '← 返回首页',
+    drop: '拖拽文件到此处，或点击选择',
+    original: '原图', result: '结果', download: '下载',
+    quality: '质量', size_px: '尺寸 (px)', keep_ratio: '保持比例', out_fmt: '输出格式',
+    wm_text: '水印文字', opacity: '不透明度', scale: '缩放倍数',
+    text: '文本', title_opt: '标题（可选）', input: '输入', operation: '操作',
+    convert: '转换', generate: '生成', render: '渲染', format: '格式化', minify: '压缩',
+    lines_in: '输入（每行一条）', dedupe: '去重', numeric_sort: '数字排序', descending: '降序',
+    delimiter: '分隔符', comma: '逗号', semicolon: '分号', tab: '制表符',
+    sheet: '工作表（留空 = 第一个）',
+    category: '类别', from: '从', to: '到', invalid: '无效', process: '处理',
+    pdf_ascii: '（仅 ASCII，非 ASCII 字符显示为 ?）',
+    t_img_png_jpeg: 'PNG → JPEG', t_img_jpeg_png: 'JPEG → PNG', t_img_png_webp: 'PNG → WebP',
+    t_img_jpeg_webp: 'JPEG → WebP', t_img_webp_png: 'WebP → PNG', t_img_webp_jpeg: 'WebP → JPEG',
+    t_img_resize: '图像缩放', t_img_crop: '图像裁剪', t_img_watermark: '添加水印', t_img_text2img: '文字 → PNG',
+    t_txt_pdf: '文本 → PDF', t_txt_docx: '文本 → Word', t_txt_encode: '编码转换',
+    t_txt_json: 'JSON 格式化 / 压缩', t_txt_md: 'Markdown → HTML', t_txt_lines: '行去重 / 排序',
+    t_txt_csv_json: 'CSV → JSON', t_txt_xlsx: 'Excel → CSV / JSON', t_unit_conv: '单位转换',
+    d_img_png_jpeg: 'PNG 转 JPEG，可调质量', d_img_jpeg_png: 'JPEG 转 PNG（无损）',
+    d_img_png_webp: 'PNG 转 WebP（无损）', d_img_jpeg_webp: 'JPEG 转 WebP（无损）',
+    d_img_webp_png: 'WebP 转 PNG', d_img_webp_jpeg: 'WebP 转 JPEG',
+    d_img_resize: '按最长边或指定尺寸缩放', d_img_crop: '裁剪指定矩形区域',
+    d_img_watermark: '平铺文字水印', d_img_text2img: '文字渲染为 PNG（水印素材）',
+    d_txt_pdf: '纯文本转 PDF 文档', d_txt_docx: '文本生成 .docx 文档',
+    d_txt_encode: 'Base64 / Hex / GBK 互转', d_txt_json: '格式化或压缩 JSON',
+    d_txt_md: 'CommonMark 渲染为 HTML', d_txt_lines: '行去重、字母/数字排序',
+    d_txt_csv_json: 'CSV（含表头）转 JSON', d_txt_xlsx: '读取 .xlsx 第一个工作表',
+    d_unit_conv: '长度、重量、温度等 8 类单位',
+    s_img_png_jpeg: '转换为 JPEG（质量 1-100）', s_img_jpeg_png: '转换为 PNG（无损）',
+    s_img_png_webp: '转换为 WebP（无损）', s_img_jpeg_webp: '转换为 WebP（无损）',
+    s_img_webp_png: '转换为 PNG', s_img_webp_jpeg: '转换为 JPEG',
+    op_b64e: '文本 → Base64', op_b64d: 'Base64 → 文本', op_hexe: '文本 → Hex',
+    op_hexd: 'Hex → 文本', op_gbke: 'UTF-8 → GBK (hex)', op_gbkd: 'GBK (hex) → UTF-8',
+    cat_length: '长度', cat_weight: '重量', cat_temperature: '温度', cat_area: '面积',
+    cat_volume: '体积', cat_speed: '速度', cat_data: '数据大小', cat_time: '时间',
+  },
+  en: {
+    title: 'CV Tools',
+    search: 'search tools (e.g. png, json, pdf)...',
+    tab_all: 'All', tab_image: 'Image', tab_text: 'Text', tab_unit: 'Unit',
+    empty: 'no matching tools',
+    back: '\u2190 Back to Home',
+    drop: 'drop a file here or click to select',
+    original: 'Original', result: 'Result', download: 'Download',
+    quality: 'Quality', size_px: 'Size (px)', keep_ratio: 'keep ratio', out_fmt: 'Output',
+    wm_text: 'Text', opacity: 'Opacity', scale: 'Scale',
+    text: 'Text', title_opt: 'Title (optional)', input: 'Input', operation: 'Operation',
+    convert: 'Convert', generate: 'Generate', render: 'Render', format: 'Format', minify: 'Minify',
+    lines_in: 'Input (one per line)', dedupe: 'dedupe', numeric_sort: 'numeric sort', descending: 'descending',
+    delimiter: 'Delimiter', comma: 'comma', semicolon: 'semicolon', tab: 'tab',
+    sheet: 'Sheet (empty = first)',
+    category: 'Category', from: 'From', to: 'To', invalid: 'invalid', process: 'Process',
+    pdf_ascii: ' (ASCII only; non-ASCII becomes ?)',
+    t_img_png_jpeg: 'PNG → JPEG', t_img_jpeg_png: 'JPEG → PNG', t_img_png_webp: 'PNG → WebP',
+    t_img_jpeg_webp: 'JPEG → WebP', t_img_webp_png: 'WebP → PNG', t_img_webp_jpeg: 'WebP → JPEG',
+    t_img_resize: 'Resize', t_img_crop: 'Crop', t_img_watermark: 'Watermark', t_img_text2img: 'Text → PNG',
+    t_txt_pdf: 'Text → PDF', t_txt_docx: 'Text → Word', t_txt_encode: 'Encode / Decode',
+    t_txt_json: 'JSON Format / Minify', t_txt_md: 'Markdown → HTML', t_txt_lines: 'Dedupe / Sort Lines',
+    t_txt_csv_json: 'CSV → JSON', t_txt_xlsx: 'Excel → CSV / JSON', t_unit_conv: 'Unit Converter',
+    d_img_png_jpeg: 'Convert PNG to JPEG with quality control', d_img_jpeg_png: 'Convert JPEG to PNG (lossless)',
+    d_img_png_webp: 'Convert PNG to WebP (lossless)', d_img_jpeg_webp: 'Convert JPEG to WebP (lossless)',
+    d_img_webp_png: 'Convert WebP to PNG', d_img_webp_jpeg: 'Convert WebP to JPEG',
+    d_img_resize: 'Scale by longest side or exact size', d_img_crop: 'Crop a rectangular region',
+    d_img_watermark: 'Tile text watermark across image', d_img_text2img: 'Render text to PNG (watermark source)',
+    d_txt_pdf: 'Render plain text into a PDF', d_txt_docx: 'Generate a .docx document from text',
+    d_txt_encode: 'Base64, Hex, UTF-8 \u2194 GBK', d_txt_json: 'Pretty-print or compress JSON',
+    d_txt_md: 'Render CommonMark to an HTML fragment', d_txt_lines: 'Dedupe lines, sort alphabetically or numerically',
+    d_txt_csv_json: 'Convert CSV (with header row) to JSON', d_txt_xlsx: 'Read the first worksheet of an .xlsx',
+    d_unit_conv: 'Length, weight, temperature, area, volume, speed, data, time',
+    s_img_png_jpeg: 'Convert to JPEG (quality 1-100)', s_img_jpeg_png: 'Convert to PNG (lossless)',
+    s_img_png_webp: 'Convert to WebP (lossless)', s_img_jpeg_webp: 'Convert to WebP (lossless)',
+    s_img_webp_png: 'Convert to PNG', s_img_webp_jpeg: 'Convert to JPEG',
+    op_b64e: 'Text → Base64', op_b64d: 'Base64 → Text', op_hexe: 'Text → Hex',
+    op_hexd: 'Hex → Text', op_gbke: 'UTF-8 → GBK (hex)', op_gbkd: 'GBK (hex) → UTF-8',
+    cat_length: 'Length', cat_weight: 'Weight', cat_temperature: 'Temperature', cat_area: 'Area',
+    cat_volume: 'Volume', cat_speed: 'Speed', cat_data: 'Data size', cat_time: 'Time',
+  }
+};
+
+let lang = localStorage.getItem('lang') ||
+  ((navigator.language || 'en').toLowerCase().startsWith('zh') ? 'zh' : 'en');
+const t = k => (I18N[lang] && I18N[lang][k]) || I18N.en[k] || k;
+
+function applyLang() {
+  document.documentElement.lang = lang === 'zh' ? 'zh-CN' : 'en';
+  document.title = t('title');
+  document.querySelectorAll('[data-i18n]').forEach(el => { el.textContent = t(el.dataset.i18n); });
+  document.querySelectorAll('[data-i18n-ph]').forEach(el => { el.placeholder = t(el.dataset.i18nPh); });
+  const btn = document.getElementById('lang');
+  if (btn) btn.textContent = lang === 'zh' ? 'EN' : '中文';
+}
+
+// ---- capability registry ------------------------------------------------
+
+const TOOLS = [
+  { id: 'img_png_jpeg', cat: 'image', icon: '🖼️' },
+  { id: 'img_jpeg_png', cat: 'image', icon: '🖼️' },
+  { id: 'img_png_webp', cat: 'image', icon: '🖼️' },
+  { id: 'img_jpeg_webp', cat: 'image', icon: '🖼️' },
+  { id: 'img_webp_png', cat: 'image', icon: '🖼️' },
+  { id: 'img_webp_jpeg', cat: 'image', icon: '🖼️' },
+  { id: 'img_resize', cat: 'image', icon: '📐' },
+  { id: 'img_crop', cat: 'image', icon: '✂️' },
+  { id: 'img_watermark', cat: 'image', icon: '💧' },
+  { id: 'img_text2img', cat: 'image', icon: '🔤' },
+  { id: 'txt_pdf', cat: 'text', icon: '📄' },
+  { id: 'txt_docx', cat: 'text', icon: '📝' },
+  { id: 'txt_encode', cat: 'text', icon: '🔁' },
+  { id: 'txt_json', cat: 'text', icon: '🧾' },
+  { id: 'txt_md', cat: 'text', icon: '📋' },
+  { id: 'txt_lines', cat: 'text', icon: '📃' },
+  { id: 'txt_csv_json', cat: 'text', icon: '📊' },
+  { id: 'txt_xlsx', cat: 'text', icon: '📗' },
+  { id: 'unit_conv', cat: 'unit', icon: '📏' },
+];
+
+const UNITS = {
+  length: [['m','m'],['km','km'],['cm','cm'],['mm','mm'],['in','in'],['ft','ft'],['yd','yd'],['mi','mi']],
+  weight: [['kg','kg'],['g','g'],['mg','mg'],['t','t'],['lb','lb'],['oz','oz']],
+  temperature: [['°C','C'],['°F','F'],['K','K']],
+  area: [['m²','m2'],['km²','km2'],['ha','ha'],['acre','acre'],['ft²','ft2']],
+  volume: [['L','L'],['mL','mL'],['m³','m3'],['gal','gal']],
+  speed: [['km/h','kmh'],['mph','mph'],['m/s','ms'],['knot','knot']],
+  data: [['B','B'],['KB','KB'],['MB','MB'],['GB','GB'],['TB','TB'],['PB','PB']],
+  time: [['s','s'],['min','min'],['h','h'],['day','day'],['week','week'],['month','month'],['year','year']],
+};
+
+// ---- list (accordion) ------------------------------------------------------
+
+let activeTab = 'all';
+let query = '';
+let current = null;
+
+const catText = c => t('tab_' + c);
+const toolName = x => t('t_' + x.id);
+const toolDesc = x => t('d_' + x.id);
+
+function matches(x) {
+  const q = query.toLowerCase();
+  if (!q) return true;
+  const hay = (toolName(x) + ' ' + toolDesc(x) + ' ' + catText(x.cat) +
+    t('t_' + x.id) + ' ' + t('d_' + x.id) + ' ' + t('tab_' + x.cat)).toLowerCase();
+  return hay.includes(q);
+}
+
+function renderList() {
+  const list = document.getElementById('list');
+  const items = TOOLS.filter(x => (activeTab === 'all' || x.cat === activeTab) && matches(x));
+  if (!items.length) {
+    list.innerHTML = '<div class="empty" data-i18n="empty">no matching tools</div>';
+    applyLang();
+    return;
+  }
+  list.innerHTML = items.map(x =>
+    '<div class="tool-item" data-id="' + x.id + '">' +
+    '<button class="tool-head" type="button">' +
+    '<span class="icon">' + x.icon + '</span>' +
+    '<span class="tool-meta">' +
+    '<span class="name" data-i18n="t_' + x.id + '">' + toolName(x) + '</span>' +
+    '<span class="desc" data-i18n="d_' + x.id + '">' + toolDesc(x) + '</span>' +
+    '</span><span class="chev">\u25B8</span></button>' +
+    '<div class="tool-body"></div></div>').join('');
+  list.querySelectorAll('.tool-head').forEach(h => h.onclick = () => toggleItem(h.parentElement));
+  applyLang();
+}
+
+function toggleItem(item) {
+  const wasOpen = item.classList.contains('open');
+  document.querySelectorAll('.tool-item.open').forEach(i => {
+    i.classList.remove('open');
+    i.querySelector('.tool-body').innerHTML = '';
+  });
+  if (!wasOpen) {
+    item.classList.add('open');
+    const x = TOOLS.find(y => y.id === item.dataset.id);
+    if (x) renderPanel(item.querySelector('.tool-body'), x);
+  }
+}
+
+document.getElementById('search').addEventListener('input', e => { query = e.target.value.trim(); renderList(); });
+document.getElementById('tabs').addEventListener('click', e => {
+  const btn = e.target.closest('.tab'); if (!btn) return;
+  document.querySelectorAll('.tab').forEach(x => x.classList.toggle('active', x === btn));
+  activeTab = btn.dataset.tab; renderList();
+});
+document.getElementById('lang').addEventListener('click', () => {
+  lang = lang === 'zh' ? 'en' : 'zh';
+  localStorage.setItem('lang', lang);
+  applyLang();
+});
+
+// ---- panel plumbing --------------------------------------------------------
+
+function renderPanel(el, x) {
+  current = x;
+  const builders = { img_png_jpeg: panelConvert, img_jpeg_png: panelConvert, img_png_webp: panelConvert,
+    img_jpeg_webp: panelConvert, img_webp_png: panelConvert, img_webp_jpeg: panelConvert,
+    img_resize: panelResize, img_crop: panelCrop, img_watermark: panelWatermark, img_text2img: panelTextImage,
+    txt_pdf: panelTextOut, txt_docx: panelTextOut, txt_encode: panelEncode, txt_json: panelJson,
+    txt_md: panelMd, txt_lines: panelLines, txt_csv_json: panelCsvJson, txt_xlsx: panelXlsx,
+    unit_conv: panelUnit };
+  el.innerHTML = (builders[x.id] || panelFallback)(x);
+  bindPanel(x, el);
+  applyLang();
+}
+
+function panelFallback(x) {
+  return '<h2 data-i18n="t_' + x.id + '">' + toolName(x) + '</h2><p class="sub" data-i18n="d_' + x.id + '">' + toolDesc(x) + '</p>';
+}
+
+function fileInput(accept) {
+  return '<div class="dropzone" id="dz">' +
+    '<div data-i18n="drop">drop a file here or click to select</div>' +
+    '<input type="file" id="file" accept="' + accept + '" hidden>' +
+    '<div class="fname" id="fname"></div></div>';
+}
+
+function bindDropzone(el, accept, onFile) {
+  const dz = el.querySelector('#dz');
+  const input = el.querySelector('#file');
+  if (accept) input.accept = accept;
+  const show = () => {
+    const f = input.files[0];
+    el.querySelector('#fname').textContent = f ? f.name : '';
+  };
+  dz.onclick = () => input.click();
+  dz.ondragover = e => { e.preventDefault(); dz.classList.add('over'); };
+  dz.ondragleave = () => dz.classList.remove('over');
+  dz.ondrop = e => {
+    e.preventDefault(); dz.classList.remove('over');
+    const f = e.dataTransfer.files[0];
+    if (f && (!accept || f.type.startsWith('image/'))) { input.files = e.dataTransfer.files; show(); onFile(f); }
+  };
+  input.onchange = () => { show(); onFile(input.files[0]); };
+}
+
+function resultWrap() {
+  return '<div class="orig-wrap" hidden><span class="lbl" data-i18n="original">Original</span>' +
+    '<img class="preview orig-preview" alt=""><div class="meta orig-name"></div></div>' +
+    '<div class="res-wrap" hidden><span class="lbl" data-i18n="result">Result</span>' +
+    '<img class="preview" id="res-preview" alt=""><div class="meta" id="res-meta"></div>' +
+    '<div class="actions"><button class="btn" id="dl" data-i18n="download">Download</button></div></div>';
+}
+
+function outMeta(bytes, name) {
+  return '<div class="meta">' + name + ' &mdash; ' + (bytes.length / 1024).toFixed(1) + ' KB</div>';
+}
+
+function download(bytes, filename) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([bytes]));
+  a.download = filename;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+}
+
+function run(fn) {
+  const el = current ? document.querySelector('.tool-item[data-id="' + current.id + '"] .tool-body') : null;
+  const res = (el && el.querySelector('.result')) || document.getElementById('list');
+  res.querySelectorAll('.err').forEach(x => x.remove());
+  return Promise.resolve(ready).then(fn).catch(e => {
+    res.insertAdjacentHTML('beforeend', '<p class="err">' + e + '</p>');
+    throw e;
+  });
+}
+
+function outName(orig, ext) {
+  const base = (orig || 'output').replace(/\.[^.]+$/, '');
+  return base + '.' + ext;
+}
+
+function intVal(el, sel, dflt) {
+  const v = parseInt((el.querySelector(sel) || {}).value, 10);
+  return Number.isFinite(v) ? v : dflt;
+}
+
+// ---- image panels ---------------------------------------------------------
+
+function panelConvert(x) {
+  const parts = x.id.split('_'); // img_<src>_<dst>
+  const to = parts[3] || 'jpeg';
+  const from = parts[2] || 'image';
+  const hasQ = to === 'jpeg';
+  return '<h2 data-i18n="t_' + x.id + '">' + toolName(x) + '</h2>' +
+    '<p class="sub" data-i18n="s_' + x.id + '">' + t('s_' + x.id) + '</p>' +
+    fileInput('image/*') +
+    (hasQ ? '<div class="field" style="margin-top:14px"><label><span data-i18n="quality">Quality</span>: <span id="qval">85</span></label>' +
+      '<input type="range" id="quality" min="1" max="100" value="85" style="width:100%"></div>' : '') +
+    '<div class="result">' + resultWrap() + '</div>';
+}
+
+function panelResize() {
+  return '<h2 data-i18n="t_img_resize">Resize</h2><p class="sub" data-i18n="d_img_resize"></p>' +
+    fileInput('image/*') +
+    '<div class="field"><div class="row"><label data-i18n="size_px">Size (px)</label><input type="number" id="size" value="1024" min="1" style="width:110px">' +
+    '<label style="margin-left:8px"><input type="checkbox" id="ratio" checked> <span data-i18n="keep_ratio">keep ratio</span></label></div></div>' +
+    '<div class="field"><div class="row"><label data-i18n="out_fmt">Output</label>' +
+    '<select id="fmt"><option value="png">PNG</option><option value="jpeg">JPEG</option><option value="webp">WebP</option></select></div></div>' +
+    '<div class="result">' + resultWrap() + '</div>';
+}
+
+function panelCrop() {
+  return '<h2 data-i18n="t_img_crop">Crop</h2><p class="sub" data-i18n="d_img_crop"></p>' +
+    fileInput('image/*') +
+    '<div class="field"><div class="row">' +
+    '<label>X</label><input type="number" id="x" value="0" min="0" style="width:80px">' +
+    '<label>Y</label><input type="number" id="y" value="0" min="0" style="width:80px">' +
+    '<label>W</label><input type="number" id="w" value="100" min="1" style="width:80px">' +
+    '<label>H</label><input type="number" id="h" value="100" min="1" style="width:80px">' +
+    '</div></div>' +
+    '<div class="field"><div class="row"><label data-i18n="out_fmt">Output</label>' +
+    '<select id="fmt"><option value="png">PNG</option><option value="jpeg">JPEG</option><option value="webp">WebP</option></select></div></div>' +
+    '<div class="result">' + resultWrap() + '</div>';
+}
+
+function panelWatermark() {
+  return '<h2 data-i18n="t_img_watermark">Watermark</h2><p class="sub" data-i18n="d_img_watermark"></p>' +
+    fileInput('image/*') +
+    '<div class="field"><div class="row"><label data-i18n="wm_text">Text</label><input type="text" id="wtext" value="TUL" style="flex:1"></div></div>' +
+    '<div class="field"><label><span data-i18n="opacity">Opacity</span>: <span id="aval">96</span></label>' +
+    '<input type="range" id="alpha" min="0" max="255" value="96" style="width:100%"></div>' +
+    '<div class="field"><div class="row"><label data-i18n="out_fmt">Output</label>' +
+    '<select id="fmt"><option value="png">PNG</option><option value="jpeg">JPEG</option><option value="webp">WebP</option></select></div></div>' +
+    '<div class="result">' + resultWrap() + '</div>';
+}
+
+function panelTextImage() {
+  return '<h2 data-i18n="t_img_text2img">Text → PNG</h2><p class="sub" data-i18n="d_img_text2img"></p>' +
+    '<div class="field"><div class="row"><label data-i18n="text">Text</label><input type="text" id="ttext" value="TUL" style="flex:1"></div></div>' +
+    '<div class="field"><div class="row"><label data-i18n="scale">Scale</label><input type="number" id="tscale" value="4" min="1" style="width:90px"></div></div>' +
+    '<div class="result">' + resultWrap() + '</div>';
+}
+
+// ---- text panels ----------------------------------------------------------
+
+function panelTextOut(x) {
+  const isDocx = x.id === 'txt_docx';
+  return '<h2 data-i18n="t_' + x.id + '">' + toolName(x) + '</h2>' +
+    '<p class="sub" data-i18n="d_' + x.id + '">' + toolDesc(x) +
+    (x.id === 'txt_pdf' ? '<span data-i18n="pdf_ascii"></span>' : '') + '</p>' +
+    '<div class="field"><label data-i18n="title_opt">Title (optional)</label><input type="text" id="title" value="" style="width:100%"></div>' +
+    '<div class="field"><label data-i18n="text">Text</label><textarea id="src" placeholder="..."></textarea></div>' +
+    '<div class="row"><button class="btn" id="go" data-i18n="generate">Generate</button></div>' +
+    '<div class="result"></div>';
+}
+
+function panelEncode() {
+  return '<h2 data-i18n="t_txt_encode">Encode / Decode</h2><p class="sub" data-i18n="d_txt_encode"></p>' +
+    '<div class="field"><label data-i18n="input">Input</label><textarea id="src" placeholder="..."></textarea></div>' +
+    '<div class="field"><div class="row"><label data-i18n="operation">Operation</label>' +
+    '<select id="op">' +
+    '<option value="b64e" data-i18n="op_b64e">Text → Base64</option>' +
+    '<option value="b64d" data-i18n="op_b64d">Base64 → Text</option>' +
+    '<option value="hexe" data-i18n="op_hexe">Text → Hex</option>' +
+    '<option value="hexd" data-i18n="op_hexd">Hex → Text</option>' +
+    '<option value="gbke" data-i18n="op_gbke">UTF-8 → GBK (hex)</option>' +
+    '<option value="gbkd" data-i18n="op_gbkd">GBK (hex) → UTF-8</option>' +
+    '</select>' +
+    '<button class="btn" id="go" data-i18n="convert">Convert</button></div></div>' +
+    '<div class="field"><label data-i18n="result">Result</label><textarea id="out" class="out" readonly></textarea></div>' +
+    '<div class="result"></div>';
+}
+
+function panelJson() {
+  return '<h2 data-i18n="t_txt_json">JSON Format / Minify</h2><p class="sub" data-i18n="d_txt_json"></p>' +
+    '<div class="field"><label data-i18n="input">Input</label><textarea id="src" placeholder="{\"a\":1}"></textarea></div>' +
+    '<div class="row"><button class="btn" id="fmt" data-i18n="format">Format</button><button class="btn" id="min" data-i18n="minify">Minify</button></div>' +
+    '<div class="field"><label data-i18n="result">Result</label><textarea id="out" class="out" readonly></textarea></div>' +
+    '<div class="result"></div>';
+}
+
+function panelMd() {
+  return '<h2 data-i18n="t_txt_md">Markdown → HTML</h2><p class="sub" data-i18n="d_txt_md"></p>' +
+    '<div class="field"><label>Markdown</label><textarea id="src" placeholder="# hello"></textarea></div>' +
+    '<div class="row"><button class="btn" id="go" data-i18n="render">Render</button></div>' +
+    '<div class="field"><label data-i18n="result">Result</label><textarea id="out" class="out" readonly></textarea></div>' +
+    '<div class="result"></div>';
+}
+
+function panelLines() {
+  return '<h2 data-i18n="t_txt_lines">Dedupe / Sort Lines</h2><p class="sub" data-i18n="d_txt_lines"></p>' +
+    '<div class="field"><label data-i18n="lines_in">Input (one per line)</label><textarea id="src" placeholder="line1"></textarea></div>' +
+    '<div class="field"><div class="row">' +
+    '<label><input type="checkbox" id="dedupe" checked> <span data-i18n="dedupe">dedupe</span></label>' +
+    '<label style="margin-left:8px"><input type="checkbox" id="numeric"> <span data-i18n="numeric_sort">numeric sort</span></label>' +
+    '<label style="margin-left:8px"><input type="checkbox" id="desc"> <span data-i18n="descending">descending</span></label>' +
+    '<button class="btn" id="go" style="margin-left:auto" data-i18n="process">Process</button></div></div>' +
+    '<div class="field"><label data-i18n="result">Result</label><textarea id="out" class="out" readonly></textarea></div>' +
+    '<div class="result"></div>';
+}
+
+function panelCsvJson() {
+  return '<h2 data-i18n="t_txt_csv_json">CSV → JSON</h2><p class="sub" data-i18n="d_txt_csv_json"></p>' +
+    '<div class="field"><label>CSV</label><textarea id="src" placeholder="name,age"></textarea></div>' +
+    '<div class="field"><div class="row"><label data-i18n="delimiter">Delimiter</label>' +
+    '<select id="delim"><option value="," data-i18n="comma">comma</option><option value=";" data-i18n="semicolon">semicolon</option><option value="\t" data-i18n="tab">tab</option></select>' +
+    '<button class="btn" id="go" data-i18n="convert">Convert</button></div></div>' +
+    '<div class="field"><label data-i18n="result">Result</label><textarea id="out" class="out" readonly></textarea></div>' +
+    '<div class="result"></div>';
+}
+
+function panelXlsx() {
+  return '<h2 data-i18n="t_txt_xlsx">Excel → CSV / JSON</h2><p class="sub" data-i18n="d_txt_xlsx"></p>' +
+    fileInput('.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet') +
+    '<div class="field" style="margin-top:14px"><div class="row"><label data-i18n="sheet">Sheet (empty = first)</label><input type="text" id="sheet" style="width:150px">' +
+    '<button class="btn" id="csv">CSV</button><button class="btn" id="json">JSON</button></div></div>' +
+    '<div class="field"><label data-i18n="result">Result</label><textarea id="out" class="out" readonly></textarea></div>' +
+    '<div class="result"></div>';
+}
+
+// ---- unit panel -----------------------------------------------------------
+
+function panelUnit() {
+  const cats = Object.keys(UNITS);
+  const opts = u => u.map(([l, v]) => '<option value="' + v + '">' + l + '</option>').join('');
+  return '<h2 data-i18n="t_unit_conv">Unit Converter</h2><p class="sub" data-i18n="d_unit_conv"></p>' +
+    '<div class="field"><div class="row"><label data-i18n="category">Category</label>' +
+    '<select id="cat">' + cats.map(c => '<option value="' + c + '" data-i18n="cat_' + c + '">' + c + '</option>').join('') + '</select></div></div>' +
+    '<div class="field"><div class="row"><label data-i18n="from">From</label>' +
+    '<select id="from">' + opts(UNITS.length) + '</select>' +
+    '<input type="number" id="val" value="1" step="any" style="width:120px">' +
+    '<label data-i18n="to">To</label><select id="to">' + opts(UNITS.length) + '</select></div></div>' +
+    '<div class="field" style="margin-top:14px"><label data-i18n="result">Result</label><input type="text" id="out" readonly style="width:100%;background:#f7f7f7"></div>' +
+    '<div class="result"></div>';
+}
+
+// ---- panel behavior -------------------------------------------------------
+
+function showOriginal(el, f) {
+  const wrap = el.querySelector('.orig-wrap');
+  if (!wrap) return;
+  wrap.hidden = false;
+  wrap.querySelector('.orig-preview').src = URL.createObjectURL(f);
+  wrap.querySelector('.orig-name').textContent = f.name + ' (' + (f.size / 1024).toFixed(1) + ' KB)';
+}
+
+function showResult(el, bytes, fname) {
+  const res = el.querySelector('.res-wrap');
+  res.hidden = false;
+  res.querySelector('#res-preview').src = URL.createObjectURL(new Blob([bytes]));
+  res.querySelector('#res-meta').textContent = fname + ' — ' + (bytes.length / 1024).toFixed(1) + ' KB';
+  res.querySelector('#dl').onclick = () => download(bytes, fname);
+}
+
+/// Live image tool: auto-process on file select and on parameter change
+/// (debounced). `spec.noFile` tools (e.g. text→PNG) run without a file.
+function bindLiveImage(el, spec) {
+  const box = { f: null };
+  let timer = null;
+
+  const schedule = () => {
+    if (!spec.noFile && !box.f) return;
+    clearTimeout(timer);
+    timer = setTimeout(processNow, 250);
+  };
+
+  const processNow = () => run(async () => {
+    const p = spec.read();
+    let u8 = null;
+    if (!spec.noFile) {
+      if (!box.f) return;
+      u8 = new Uint8Array(await box.f.arrayBuffer());
+    }
+    const out = spec.compute(u8, p);
+    showResult(el, out, spec.fname(box.f, p));
+  });
+
+  if (!spec.noFile) {
+    bindDropzone(el, spec.accept || 'image/*', f => {
+      box.f = f;
+      showOriginal(el, f);
+      schedule();
+    });
+  }
+  (spec.live || []).forEach(sel => {
+    const input = el.querySelector(sel);
+    if (input) {
+      input.addEventListener('input', schedule);
+      input.addEventListener('change', schedule);
+    }
+  });
+}
+
+function bindPanel(x, el) {
+  switch (x.id) {
+    case 'img_png_jpeg':
+      bindLiveImage(el, {
+        accept: 'image/*',
+        live: ['#quality'],
+        read: () => ({ quality: intVal(el, '#quality', 85) }),
+        compute: (u8, p) => convert_to_jpeg(u8, p.quality),
+        fname: (f, p) => outName(f ? f.name : 'image', 'jpg'),
+      });
+      break;
+    case 'img_jpeg_png':
+      bindLiveImage(el, {
+        accept: 'image/*',
+        live: [],
+        read: () => ({}),
+        compute: (u8) => convert_to_png(u8),
+        fname: (f) => outName(f ? f.name : 'image', 'png'),
+      });
+      break;
+    case 'img_png_webp':
+      bindLiveImage(el, {
+        accept: 'image/*',
+        live: [],
+        read: () => ({}),
+        compute: (u8) => convert_to_webp(u8, 80),
+        fname: (f) => outName(f ? f.name : 'image', 'webp'),
+      });
+      break;
+    case 'img_jpeg_webp':
+      bindLiveImage(el, {
+        accept: 'image/*',
+        live: [],
+        read: () => ({}),
+        compute: (u8) => convert_to_webp(u8, 80),
+        fname: (f) => outName(f ? f.name : 'image', 'webp'),
+      });
+      break;
+    case 'img_webp_png':
+      bindLiveImage(el, {
+        accept: 'image/*',
+        live: [],
+        read: () => ({}),
+        compute: (u8) => convert_to_png(u8),
+        fname: (f) => outName(f ? f.name : 'image', 'png'),
+      });
+      break;
+    case 'img_webp_jpeg':
+      bindLiveImage(el, {
+        accept: 'image/*',
+        live: ['#quality'],
+        read: () => ({ quality: intVal(el, '#quality', 85) }),
+        compute: (u8, p) => convert_to_jpeg(u8, p.quality),
+        fname: (f) => outName(f ? f.name : 'image', 'jpg'),
+      });
+      break;
+    case 'img_resize':
+      bindLiveImage(el, {
+        accept: 'image/*',
+        live: ['#size', '#ratio', '#fmt'],
+        read: () => ({
+          size: intVal(el, '#size', 1024),
+          ratio: el.querySelector('#ratio').checked,
+          fmt: el.querySelector('#fmt').value,
+        }),
+        compute: (u8, p) => resize_image(u8, p.size, p.ratio, p.fmt),
+        fname: (f, p) => outName(f ? f.name : 'image', p.fmt),
+      });
+      break;
+    case 'img_crop':
+      bindLiveImage(el, {
+        accept: 'image/*',
+        live: ['#x', '#y', '#w', '#h', '#fmt'],
+        read: () => ({
+          x: intVal(el, '#x', 0), y: intVal(el, '#y', 0),
+          w: Math.max(1, intVal(el, '#w', 100)), h: Math.max(1, intVal(el, '#h', 100)),
+          fmt: el.querySelector('#fmt').value,
+        }),
+        compute: (u8, p) => crop_image(u8, p.x, p.y, p.w, p.h, p.fmt),
+        fname: (f, p) => outName(f ? f.name : 'image', p.fmt),
+      });
+      break;
+    case 'img_watermark':
+      bindLiveImage(el, {
+        accept: 'image/*',
+        live: ['#wtext', '#alpha', '#fmt'],
+        read: () => ({
+          text: el.querySelector('#wtext').value || 'TUL',
+          alpha: intVal(el, '#alpha', 96),
+          fmt: el.querySelector('#fmt').value,
+        }),
+        compute: (u8, p) => add_text_watermark(u8, p.text, p.alpha, p.fmt),
+        fname: (f, p) => outName(f ? f.name : 'image', p.fmt),
+      });
+      break;
+    case 'img_text2img':
+      // pure text rendering — no file needed; live preview on input
+      bindLiveImage(el, {
+        noFile: true,
+        live: ['#ttext', '#tscale'],
+        read: () => ({
+          text: el.querySelector('#ttext').value || 'TUL',
+          scale: Math.max(1, intVal(el, '#tscale', 4)),
+        }),
+        compute: (_u8, p) => text_to_image(p.text, p.scale),
+        fname: () => 'text.png',
+      });
+      break;
+    case 'txt_pdf': case 'txt_docx': {
+      const btn = el.querySelector('#go');
+      btn.onclick = () => run(async () => {
+        const text = el.querySelector('#src').value;
+        const out = x.id === 'txt_pdf'
+          ? text_to_pdf(text, el.querySelector('#title').value || '')
+          : (await loadOffice()).text_to_docx(text);
+        const ext = x.id === 'txt_pdf' ? 'pdf' : 'docx';
+        const r = el.querySelector('.result');
+        r.innerHTML = outMeta(out, 'document.' + ext) + '<div class="actions"><button class="btn" id="dl" data-i18n="download">Download</button></div>';
+        applyLang();
+        r.querySelector('#dl').onclick = () => download(out, 'document.' + ext);
+      });
+      break;
+    }
+    case 'txt_encode': {
+      const go = el.querySelector('#go');
+      const op = el.querySelector('#op');
+      const out = el.querySelector('#out');
+      go.onclick = () => run(() => {
+        const src = el.querySelector('#src').value;
+        const enc = new TextEncoder(), dec = new TextDecoder();
+        switch (op.value) {
+          case 'b64e': out.value = to_base64(enc.encode(src)); break;
+          case 'b64d': out.value = dec.decode(from_base64(src)); break;
+          case 'hexe': out.value = to_hex(enc.encode(src)); break;
+          case 'hexd': out.value = dec.decode(from_hex(src)); break;
+          case 'gbke': out.value = to_hex(utf8_to_gbk(src)); break;
+          case 'gbkd': out.value = gbk_to_utf8(from_hex(src)); break;
+        }
+      });
+      break;
+    }
+    case 'txt_json': {
+      el.querySelector('#fmt').onclick = () => run(() => el.querySelector('#out').value = json_format(el.querySelector('#src').value));
+      el.querySelector('#min').onclick = () => run(() => el.querySelector('#out').value = json_minify(el.querySelector('#src').value));
+      break;
+    }
+    case 'txt_md': {
+      el.querySelector('#go').onclick = () => run(() => el.querySelector('#out').value = markdown_to_html(el.querySelector('#src').value));
+      break;
+    }
+    case 'txt_lines': {
+      el.querySelector('#go').onclick = () => run(() => {
+        let s = el.querySelector('#src').value;
+        if (el.querySelector('#dedupe').checked) s = dedupe_lines(s);
+        if (el.querySelector('#numeric').checked || el.querySelector('#desc').checked) {
+          s = sort_lines(s, el.querySelector('#numeric').checked, el.querySelector('#desc').checked);
+        }
+        el.querySelector('#out').value = s;
+      });
+      break;
+    }
+    case 'txt_csv_json': {
+      el.querySelector('#go').onclick = () => run(() => {
+        const d = el.querySelector('#delim').value;
+        el.querySelector('#out').value = csv_to_json(el.querySelector('#src').value, d);
+      });
+      break;
+    }
+    case 'txt_xlsx': {
+      const box = { f: null };
+      const doConv = async (asJson) => {
+        if (!box.f) return;
+        const buf = await box.f.arrayBuffer();
+        const sheet = el.querySelector('#sheet').value || '';
+        const api = await loadOffice();
+        el.querySelector('#out').value = asJson
+          ? api.xlsx_to_json(new Uint8Array(buf), sheet)
+          : api.xlsx_to_csv(new Uint8Array(buf), sheet);
+      };
+      bindDropzone(el, '.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', f => { box.f = f; doConv(false); });
+      el.querySelector('#csv').onclick = () => run(() => doConv(false));
+      el.querySelector('#json').onclick = () => run(() => doConv(true));
+      break;
+    }
+    case 'unit_conv': {
+      const cat = el.querySelector('#cat'), from = el.querySelector('#from'), to = el.querySelector('#to');
+      const fill = () => {
+        const units = UNITS[cat.value];
+        from.innerHTML = units.map(([l, v]) => '<option value="' + v + '">' + l + '</option>').join('');
+        to.innerHTML = units.map(([l, v]) => '<option value="' + v + '">' + l + '</option>').join('');
+        to.value = units[1] ? units[1][1] : units[0][1];
+        applyLang();
+      };
+      const update = () => run(() => {
+        const r = convert_unit(cat.value, parseFloat(el.querySelector('#val').value), from.value, to.value);
+        el.querySelector('#out').value = isNaN(r) ? t('invalid') : String(r);
+      });
+      cat.onchange = () => { fill(); update(); };
+      ['#from', '#to', '#val'].forEach(s => {
+        const input = el.querySelector(s);
+        input.addEventListener('input', update);
+        input.addEventListener('change', update);
+      });
+      fill();
+      update();
+      break;
+    }
+  }
+}
+
+// ---- init ----------------------------------------------------------------
+
+renderList();
+</script>
+</body>
+</html>

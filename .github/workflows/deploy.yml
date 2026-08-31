@@ -2,6 +2,11 @@ name: Deploy to Cloudflare Workers
 
 on:
   workflow_dispatch:
+    inputs:
+      enable_tul_cv:
+        description: 'Enable tul_cv feature (builds & embeds the WASM tools)'
+        type: boolean
+        default: false
   push:
     tags: [ 'v*' ]
     
@@ -20,6 +25,13 @@ jobs:
       - name: Install wrangler
         run: |
           npm install -g wrangler
+      - name: Install worker-build
+        run: cargo install -q worker-build
+      - name: Build tul-cv WASM assets (if enabled)
+        if: ${{ github.event.inputs.enable_tul_cv == 'true' }}
+        run: |
+          cargo install -q wasm-bindgen-cli --version 0.2.127
+          make cv-wasm
       - name: Update environments
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -101,6 +113,7 @@ jobs:
       - name: Deploy to Cloudflare Workers
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          TUL_CV_FEATURES: ${{ github.event.inputs.enable_tul_cv == 'true' && 'tul_cv' || '' }}
         run: |
           set -o pipefail
           npx wrangler deploy 2>&1 | sed -E 's/https:\/\/[a-zA-Z0-9.-]*\.(workers|pages)\.dev/https:\/\/[REDACTED].\1.dev/g'

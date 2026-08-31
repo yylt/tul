@@ -43,10 +43,11 @@ jobs:
       - name: Install wrangler
         run: npm install -g wrangler
 
-      - name: Build worker (dev mode)
+      - name: Build worker (dev mode, default features)
         run: |
           echo "Building worker in development mode..."
-          worker-build --dev
+          chmod +x scripts/build-worker.sh
+          scripts/build-worker.sh --dev
           echo "Build completed successfully"
 
       - name: Verify build artifacts

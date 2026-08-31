@@ -3,9 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Search</title>
+<title data-i18n="title">Search</title>
 <style>
 <!-- NORMAL_CSS -->
+.topbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.topbar .lang-btn { font-size: .8rem; }
 .radios { display: flex; justify-content: center; gap: 24px; margin-bottom: 14px; }
 .radios label { font-size: .85rem; cursor: pointer; display: flex; align-items: center; gap: 5px; }
 .radios input[type=radio] { cursor: pointer; accent-color: #666; }
@@ -13,18 +15,37 @@
 </head>
 <body>
 <div class="card">
-<p class="desc">Search the web through DuckDuckGo or Startpage.</p>
+<div class="topbar">
+<span></span>
+<button class="btn lang-btn" id="lang">中文</button>
+</div>
+<p class="desc" data-i18n="desc">Search the web through DuckDuckGo or Startpage.</p>
 <div class="radios">
 <label><input type="radio" name="engine" value="ddg" checked> DuckDuckGo</label>
 <label><input type="radio" name="engine" value="sp"> Startpage</label>
 </div>
 <form onsubmit="return go(event)" class="form-row">
-<input id="q" type="text" placeholder="search terms..." autofocus>
-<button class="btn">Go</button>
+<input id="q" type="text" data-i18n-ph="ph" placeholder="search terms..." autofocus>
+<button class="btn" data-i18n="go">Go</button>
 </form>
-<p class="back"><a href="/">&larr; Back to Home</a></p>
+<p class="back"><a href="/" data-i18n="back">&larr; Back to Home</a></p>
 </div>
 <script>
+const I18N = {
+  zh: { title: '搜索', desc: '通过 DuckDuckGo 或 Startpage 搜索网页。', ph: '搜索关键词...', go: '搜索', back: '← 返回首页' },
+  en: { title: 'Search', desc: 'Search the web through DuckDuckGo or Startpage.', ph: 'search terms...', go: 'Go', back: '← Back to Home' }
+};
+let lang = localStorage.getItem('lang') || ((navigator.language || 'en').toLowerCase().startsWith('zh') ? 'zh' : 'en');
+function apply() {
+  const t = I18N[lang] || I18N.en;
+  document.documentElement.lang = lang === 'zh' ? 'zh-CN' : 'en';
+  document.title = t.title;
+  document.querySelectorAll('[data-i18n]').forEach(el => { el.innerHTML = t[el.dataset.i18n]; });
+  document.querySelectorAll('[data-i18n-ph]').forEach(el => { el.placeholder = t[el.dataset.i18nPh]; });
+  document.getElementById('lang').textContent = lang === 'zh' ? 'EN' : '中文';
+}
+document.getElementById('lang').addEventListener('click', () => { lang = lang === 'zh' ? 'en' : 'zh'; localStorage.setItem('lang', lang); apply(); });
+apply();
 function go(e) { e.preventDefault(); var q = document.getElementById('q').value.trim(); var s = document.querySelector('input[name="engine"]:checked').value; if (q) location.href = '/tul_s?q=' + encodeURIComponent(q) + '&s=' + s; return false; }
 </script>
 </body>

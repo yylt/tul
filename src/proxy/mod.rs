@@ -147,7 +147,7 @@ fn get_cookie_by_name(cookie_str: &str, key: &str) -> Option<String> {
 
 pub async fn handler(req: Request, env: &Env) -> Result<Response> {
     let dns_host = get_or_init_env(&DOH_HOST, env, "DOH_HOST", "dns.google").await;
-    let ech_domain = get_or_init_env(&ECH_DOMAIN, env, "ECH_DOMAIN", "linux.do").await;
+    let ech_domain = get_or_init_env(&ECH_DOMAIN, env, "ECH_DOMAIN", "v2ex.com").await;
 
     let query: Option<HashMap<String, String>> = req.query().ok();
     let origin_path = req.path();
@@ -186,6 +186,10 @@ pub async fn handler(req: Request, env: &Env) -> Result<Response> {
         "/tul_ip" => ip::handler_text(&req).await,
         "/tul_colo" => ip::handler_colo(&req).await,
         "/tul_dl" => ip::handler_dl(&req).await,
+        #[cfg(feature = "tul_cv")]
+        "/tul_cv" => crate::tools::cv::handler(&req).await,
+        #[cfg(feature = "tul_cv")]
+        path if path.starts_with("/tul_cv/") => crate::tools::cv::asset_handler(&req).await,
         "/" => ip::handler_html(&req).await,
         _ => {
             let req_url = req.url()?;
