@@ -9,7 +9,9 @@ license = "MIT"
 crate-type = ["cdylib"]
 
 [dependencies]
-wasm-bindgen = "0.2.127"
+# Version is inherited from the workspace, which resolves it once for the
+# worker and both cv modules (see the root Cargo.toml).
+wasm-bindgen = { workspace = true }
 csv = "1.4.0"
 serde_json = "1"
 
@@ -18,15 +20,3 @@ calamine = "0.36.1"
 # docx-rs without the "wasm" feature (we call it from our own wasm); the
 # optional image dependency stays off, keeping the binary lean
 docx-rs = { version = "0.4.22", default-features = false }
-
-[profile.release]
-opt-level = "z"
-lto = true
-codegen-units = 1
-panic = "abort"
-strip = true
-
-[profile.dev]
-opt-level = 2
-
-[dev-dependencies]

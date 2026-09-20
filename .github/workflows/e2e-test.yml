@@ -35,7 +35,7 @@ jobs:
       - name: Install worker-build
         run: |
           if ! command -v worker-build &> /dev/null; then
-            cargo install worker-build
+            cargo install worker-build --version 0.8.5
           else
             echo "worker-build already installed"
           fi

@@ -9,7 +9,7 @@ on:
         default: false
   push:
     tags: [ 'v*' ]
-    
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -26,11 +26,10 @@ jobs:
         run: |
           npm install -g wrangler
       - name: Install worker-build
-        run: cargo install -q worker-build
+        run: cargo install -q worker-build --version 0.8.5
       - name: Build tul-cv WASM assets (if enabled)
         if: ${{ github.event.inputs.enable_tul_cv == 'true' }}
         run: |
-          cargo install -q wasm-bindgen-cli --version 0.2.127
           make cv-wasm
       - name: Update environments
         env:
@@ -66,12 +65,12 @@ jobs:
           }
           for SECRET_NAME in "${SECRET_NAMES[@]}"; do
               echo "--- 处理 ${SECRET_NAME} ---"
-              
+
               if echo "$SECRET_LIST_OUTPUT" | grep -q "$SECRET_NAME"; then
                 echo "✅ Worker中已存在${SECRET_NAME}, 跳过更新"
                 continue
               fi
-              
+
               GITHUB_VALUE=$(get_github_secret "$SECRET_NAME")
 
               if [[ -n "$GITHUB_VALUE" ]]; then
@@ -105,11 +104,11 @@ jobs:
                 else
                   echo "✅ ${SECRET_NAME} 已成功创建(作为secret变量)"
                 fi
-              else 
+              else
                 echo "!!! 未找到GitHub中配置的${SECRET_NAME}值，忽略"
               fi
           done
-          
+
       - name: Deploy to Cloudflare Workers
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -126,4 +125,3 @@ jobs:
           else
             echo "❌ 部署失败！"
           fi
-

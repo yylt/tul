@@ -1,3 +1,18 @@
+# Single lockfile for the whole repo: the worker and both tul-cv WASM modules
+# resolve `wasm-bindgen` together, so the exact pins from js-sys/web-sys/
+# wasm-bindgen-futures force one version across all three.
+[workspace]
+members = ["tul-cv-wasm", "tul-cv-wasm/office"]
+# Keep plain `cargo build` / `cargo clippy` at the root scoped to the worker;
+# the cv modules are built explicitly via `cargo build -p ...`.
+default-members = ["."]
+resolver = "2"
+
+[workspace.dependencies]
+# Requested by the cv modules. The resolved version is dictated by `worker`
+# (and the js-sys/web-sys lockstep exact pins), so never pin this to `=x.y.z`.
+wasm-bindgen = "0.2"
+
 [package]
 name = "tul"
 version = "0.1.0"
@@ -19,7 +34,7 @@ default = []
 tul_cv = []
 
 [dependencies]
-worker = { version = "0.8.5", features = ["http"], default-features = false }
+worker = { version = "0.8.6", features = ["http"], default-features = false }
 futures-util = { version = "0.3.32", default-features = false }
 tokio = { version = "1.52.3", features = ["io-util", "sync"], default-features = false }
 getrandom = { version = "0.4", features = ["wasm_js"], default-features = false }
@@ -37,3 +52,12 @@ codegen-units = 1
 
 [package.metadata.wasm-pack.profile.release]
 wasm-opt = ["-Oz", "--enable-bulk-memory", "--all-features"]
+
+# The cv modules keep opt-level = 2 in dev (host tests do real image/PDF
+# encode-decode round-trips). Profiles must live on the workspace root; they
+# are ignored, with a warning, on members.
+[profile.dev.package.tul-cv-wasm]
+opt-level = 2
+
+[profile.dev.package.tul-cv-office-wasm]
+opt-level = 2

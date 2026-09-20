@@ -1,7 +1,8 @@
 version: 2
 updates:
   - package-ecosystem: "cargo"
-    directory: "/" # Location of your Cargo.toml and Cargo.lock files
+    directories: # Location of your Cargo.toml and Cargo.lock files
+      - "/"
     schedule:
       interval: daily
   # Enable version updates for GitHub Actions
