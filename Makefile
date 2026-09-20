@@ -125,30 +125,50 @@ pre-commit: fmt lint test ## 提交前运行所有检查（格式化、Clippy、
 # ---- tul-cv-wasm (browser-side tools) ----
 
 CV_WASM_DIR := tul-cv-wasm
+
+# The cv modules are workspace members, so their artifacts land in the shared
+# root target/ dir and `cargo build` is invoked with -p from the repo root.
+CV_TARGET := target/wasm32-unknown-unknown/release
 CV_CORE := $(CV_WASM_DIR)/pkg/tul_cv_wasm.js $(CV_WASM_DIR)/pkg/tul_cv_wasm_bg.wasm
 CV_OFFICE := $(CV_WASM_DIR)/office/pkg/tul_cv_office_wasm.js $(CV_WASM_DIR)/office/pkg/tul_cv_office_wasm_bg.wasm
 
+# The bindgen CLI must match the crate version. Read the single resolved
+# version out of the workspace lockfile instead of hardcoding it, so the two
+# can never drift apart.
+WASM_BINDGEN_VERSION := $(shell sed -n '/^name = "wasm-bindgen"$$/{n;s/^version = "\(.*\)"/\1/p;q}' Cargo.lock)
+WASM_BINDGEN := $(CURDIR)/target/cargo-home/bin/wasm-bindgen
+
+define require_bindgen_cli
+	@v=$$($(WASM_BINDGEN) --version 2>/dev/null | awk '{print $$2}'); \
+	if [ "$$v" != "$(WASM_BINDGEN_VERSION)" ]; then \
+		printf "${YELLOW}安装 wasm-bindgen-cli $(WASM_BINDGEN_VERSION)（当前: $${v:-未安装}）...${NC}\n"; \
+		cargo install wasm-bindgen-cli --version $(WASM_BINDGEN_VERSION) \
+			--root $(CURDIR)/target/cargo-home --locked; \
+	fi
+endef
+
 .PHONY: cv-wasm
 cv-wasm: ## 构建 tul-cv WASM 模块并复制到 src/html（总是重新复制）
+	$(call require_bindgen_cli)
 	@printf "${GREEN}构建 tul-cv WASM (core)...${NC}\n"
-	cd $(CV_WASM_DIR) && cargo build --release --target wasm32-unknown-unknown
-	cd $(CV_WASM_DIR) && wasm-bindgen target/wasm32-unknown-unknown/release/tul_cv_wasm.wasm \
-		--out-dir pkg --target web --no-typescript
+	cargo build --release --target wasm32-unknown-unknown -p tul-cv-wasm
+	$(WASM_BINDGEN) $(CV_TARGET)/tul_cv_wasm.wasm \
+		--out-dir $(CV_WASM_DIR)/pkg --target web --no-typescript
 	cp $(abspath $(CV_CORE)) $(CURDIR)/src/html/
 	@printf "${GREEN}构建 tul-cv WASM (office)...${NC}\n"
-	cd $(CV_WASM_DIR)/office && cargo build --release --target wasm32-unknown-unknown
-	cd $(CV_WASM_DIR)/office && wasm-bindgen target/wasm32-unknown-unknown/release/tul_cv_office_wasm.wasm \
-		--out-dir pkg --target web --no-typescript
+	cargo build --release --target wasm32-unknown-unknown -p tul-cv-office-wasm
+	$(WASM_BINDGEN) $(CV_TARGET)/tul_cv_office_wasm.wasm \
+		--out-dir $(CV_WASM_DIR)/office/pkg --target web --no-typescript
 	cp $(abspath $(CV_OFFICE)) $(CURDIR)/src/html/
 	@printf "${GREEN}tul-cv WASM 已复制到 src/html${NC}\n"
 
 .PHONY: cv-test
 cv-test: ## 运行 tul-cv WASM 的宿主单元测试
-	cd $(CV_WASM_DIR) && cargo test
-	cd $(CV_WASM_DIR)/office && cargo test
+	cargo test -p tul-cv-wasm
+	cargo test -p tul-cv-office-wasm
 
 .PHONY: cv-clean
 cv-clean: ## 清理 tul-cv WASM 构建产物
-	rm -rf $(CV_WASM_DIR)/pkg $(CV_WASM_DIR)/target $(CV_WASM_DIR)/office/pkg $(CV_WASM_DIR)/office/target
+	rm -rf $(CV_WASM_DIR)/pkg $(CV_WASM_DIR)/office/pkg
 	rm -f src/html/tul_cv_wasm.js src/html/tul_cv_wasm_bg.wasm
 	rm -f src/html/tul_cv_office_wasm.js src/html/tul_cv_office_wasm_bg.wasm

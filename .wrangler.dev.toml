@@ -2,6 +2,11 @@ name = "tul"
 main = "build/worker/shim.mjs"
 compatibility_date = "2025-01-10"
 
+# Defaults matching src/proxy/mod.rs
+[vars]
+DOH_HOST = "dns.google"
+ECH_DOMAIN = "v2ex.com"
+
 # TUL_CV_FEATURES enables the tul_cv feature (set to "tul_cv"); empty by default.
 # Run `make cv-wasm` first to generate the embedded WASM assets when enabled.
 [build]

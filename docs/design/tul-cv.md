@@ -359,7 +359,9 @@ wasm-opt -Oz pkg/tul_cv_bg.wasm -o pkg/tul_cv_bg.wasm
      仅当打开对应工具时才动态 `import()` 加载
 2. **WebP 编码**：`image` 0.25 仅支持 lossless WebP 编码，质量参数忽略。
 3. **构建工具**：未用 `wasm-pack`，直接 `cargo build --release --target wasm32-unknown-unknown`
-   + `wasm-bindgen --target web --no-typescript`（需与 Cargo.toml 中 wasm-bindgen 版本匹配的 CLI）。
+   + `wasm-bindgen --target web --no-typescript`。两个 cv crate 是根目录 workspace 的成员，
+   与 worker 共用一份 `Cargo.lock`，因此 `wasm-bindgen` 只会解析出一个版本；
+   `make cv-wasm` 从 `Cargo.lock` 读出该版本并复用/安装对应的 CLI，不再手写版本号。
 4. **水印字体**：使用 `font8x8`（内置 8x8 位图 ASCII 字形）替代 `imageproc + rusttype`，
    避免字体资产与体积开销。
 5. **分发**：构建产物复制到 `src/html/`，由 Worker `include_bytes!` 内嵌分发

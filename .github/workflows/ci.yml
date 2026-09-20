@@ -21,11 +21,10 @@ jobs:
         run: make ci
       - name: Build worker (default features, no tul_cv)
         run: |
-          cargo install -q worker-build
+          cargo install -q worker-build --version 0.8.5
           chmod +x scripts/build-worker.sh
           scripts/build-worker.sh --dev
       - name: Build worker with tul_cv feature
         run: |
-          cargo install -q wasm-bindgen-cli --version 0.2.127
           make cv-wasm
           TUL_CV_FEATURES=tul_cv scripts/build-worker.sh --dev
