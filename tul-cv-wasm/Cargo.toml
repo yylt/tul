@@ -10,7 +10,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 # Version is inherited from the workspace, which resolves it once for the
-# worker and both cv modules (see the root Cargo.toml).
+# worker and cv module (see the root Cargo.toml).
 wasm-bindgen = { workspace = true }
 
 # image: only png/jpeg/webp codecs, no default features

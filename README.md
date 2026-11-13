@@ -130,13 +130,13 @@ open https://{worker-domain}/tul_cv
 ```
 
 - 图像：PNG/JPEG/WebP 互转、缩放、裁剪、文字水印、文字→PNG
-- 文本：文本→PDF、文本→Word、Base64/Hex/GBK 编码转换、JSON 格式化/压缩、Markdown→HTML、行去重/排序、CSV→JSON、Excel→CSV/JSON
+- 文本：文本→PDF、Base64/Hex/GBK 编码转换、JSON 格式化/压缩、Markdown→HTML、行去重/排序、CSV→JSON
 - 单位：长度、重量、温度、面积、体积、速度、数据大小、时间
 
 启用与构建（详见 `tul-cv-wasm/`）：
 
 ```bash
-make cv-wasm       # 构建两个 WASM 模块并复制到 src/html（生成被 gitignore 的资产）
+make cv-wasm       # 构建 WASM 模块并复制到 src/html（生成被 gitignore 的资产）
 make cv-test       # 运行宿主单元测试
 make build-cv      # 构建含 tul_cv 功能的 Worker
 make dev-cv        # 本地开发（含 tul_cv）

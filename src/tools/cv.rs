@@ -2,10 +2,8 @@ use worker::*;
 
 /// `/tul_cv` — browser-side converter tools page.
 ///
-/// The page is fully client-side: the WASM modules (tul_cv_wasm.js +
-/// tul_cv_wasm_bg.wasm for the core, tul_cv_office_wasm.js + ..._bg.wasm
-/// for the lazily-loaded office tools) are served as static assets next
-/// to the HTML.
+/// The page is fully client-side: the WASM module (tul_cv_wasm.js +
+/// tul_cv_wasm_bg.wasm) is served as static assets next to the HTML.
 pub async fn handler(_req: &Request) -> Result<Response> {
     let normal_css = include_str!("../html/tul_normal.css");
     let mut html = String::from(include_str!("../html/cv.html"));
@@ -32,16 +30,6 @@ pub async fn asset_handler(req: &Request) -> Result<Response> {
         ),
         Some("tul_cv_wasm_bg.wasm") => (
             include_bytes!("../html/tul_cv_wasm_bg.wasm").as_slice(),
-            "application/wasm",
-            "public, max-age=3600",
-        ),
-        Some("tul_cv_office_wasm.js") => (
-            include_bytes!("../html/tul_cv_office_wasm.js").as_slice(),
-            "application/javascript",
-            "public, max-age=3600",
-        ),
-        Some("tul_cv_office_wasm_bg.wasm") => (
-            include_bytes!("../html/tul_cv_office_wasm_bg.wasm").as_slice(),
             "application/wasm",
             "public, max-age=3600",
         ),
