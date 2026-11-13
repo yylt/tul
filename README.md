@@ -107,7 +107,9 @@ https://{worker-domain}/tul_s?q=rust&s=sp
 - 未传 `s` 或传入未知值时，默认使用 `ddg`
 
 ### 首页展示
-访问首页 `/` 查看当前连接详情（IP、国家、城市、数据中心、Colo、UA、语言等）及所有可用 Tools 入口（下载加速器、搜索、MCP Server、CV 工具），`/tul_ip` 纯文本返回公网 IP。
+访问首页 `/` 查看当前连接详情（IP、国家、城市、CF 边缘节点位置、UA、语言等）及所有可用 Tools 入口（下载加速器、搜索、MCP Server、CV 工具），`/tul_ip` 纯文本返回公网 IP。
+
+可选配置 Worker secret `MAPURL`（大写，值为 IP 详情查询接口地址）。Worker 向该地址附加 `ip` 查询参数，首页异步展示地理位置、ASN、网络属性等详情，并使用 Leaflet + OpenStreetMap 显示估算位置及精度半径。访问 `/?ip=1.1.1.1` 可查询指定 IPv4 / IPv6；不传 `ip` 则查询当前访问者 IP。未配置 secret 时不请求详情、不加载地图资源；不展示原始 JSON。Leaflet 资源使用 unpkg，OpenStreetMap 瓦片由浏览器直连 `https://tile.openstreetmap.org/{z}/{x}/{y}.png`，不经过 Tul 代理，保留 OpenStreetMap 署名。
 
 ```bash
 # 获取纯文本公网 IP
@@ -225,6 +227,9 @@ RRTYPE=HTTPS dnslookup v2ex.com h3://{worker-domain}/dns-query
 
     # 设置 DoH 上游服务器（默认 1.1.1.1）
     npx wrangler secret put DOH_HOST
+
+    # 设置 IP 详情接口地址（secret 名称为大写）
+    npx wrangler secret put MAPURL
     ```
 
 4.  **部署**
@@ -248,7 +253,7 @@ RRTYPE=HTTPS dnslookup v2ex.com h3://{worker-domain}/dns-query
     - 在 `Name` 输入框中输入 `CLOUDFLARE_API_TOKEN`
     - 将您的 Cloudflare API 令牌粘贴到 `Value` 输入框中
     - 点击 `Add secret` 按钮保存
-    - (可选)按上述步骤添加密钥 `PASSWORD`(默认 password), `PREFIX`(默认 /tj), `DOH_HOST`(默认 1.1.1.1)
+    - (可选)按上述步骤添加密钥 `PASSWORD`(默认 password), `PREFIX`(默认 /tj), `DOH_HOST`(默认 1.1.1.1), `MAPURL`（IP 详情查询接口地址）。部署流程会在 Worker 尚未配置 `MAPURL` 且 GitHub Secret 非空时自动设置；未配置则跳过。
 
 3.  **触发部署**
     - 转到您 fork 仓库的 `Actions` 标签

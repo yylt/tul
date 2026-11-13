@@ -23,7 +23,66 @@ pub async fn handler_colo(req: &Request) -> Result<Response> {
         .body(ResponseBody::Body(colo.into_bytes())))
 }
 
-pub async fn handler_html(req: &Request) -> Result<Response> {
+fn lookup_ip(query_ip: Option<&str>, client_ip: &str) -> Option<String> {
+    query_ip
+        .unwrap_or(client_ip)
+        .trim()
+        .parse::<std::net::IpAddr>()
+        .ok()
+        .map(|ip| ip.to_string())
+}
+
+pub async fn handler_details(req: &Request, env: &Env) -> Result<Response> {
+    let Ok(mapurl) = env.secret("MAPURL") else {
+        return Response::error("IP details are not configured", 404);
+    };
+    let request_url = req.url()?;
+    let query_ip = request_url
+        .query_pairs()
+        .find(|(key, _)| key == "ip")
+        .map(|(_, value)| value.into_owned());
+    let client_ip = req.headers().get("CF-Connecting-IP")?.unwrap_or_default();
+    let Some(ip) = lookup_ip(query_ip.as_deref(), &client_ip) else {
+        return Response::error("Invalid IP address", 400);
+    };
+    let Ok(mut url) = Url::parse(&mapurl.to_string()) else {
+        return Response::error("IP lookup is unavailable", 502);
+    };
+    if !matches!(url.scheme(), "http" | "https") {
+        return Response::error("IP lookup is unavailable", 502);
+    }
+    let pairs: Vec<_> = url
+        .query_pairs()
+        .filter(|(key, _)| key != "ip")
+        .map(|(key, value)| (key.into_owned(), value.into_owned()))
+        .collect();
+    url.query_pairs_mut()
+        .clear()
+        .extend_pairs(pairs)
+        .append_pair("ip", &ip);
+    let data = async {
+        let mut response = Fetch::Url(url).send().await?;
+        if response.status_code() != 200 {
+            return Err(Error::RustError("IP lookup failed".into()));
+        }
+        let data = response.json::<serde_json::Value>().await?;
+        if !data.is_array() {
+            return Err(Error::RustError("Invalid IP lookup response".into()));
+        }
+        Ok(data)
+    }
+    .await;
+    match data {
+        Ok(data) => {
+            let mut response = Response::from_json(&data)?;
+            response.headers_mut().set("Cache-Control", "no-store")?;
+            Ok(response)
+        }
+        Err(_) => Response::error("IP lookup is unavailable", 502),
+    }
+}
+
+pub async fn handler_html(req: &Request, env: &Env) -> Result<Response> {
     let ip = req
         .headers()
         .get("CF-Connecting-IP")?
@@ -78,7 +137,7 @@ pub async fn handler_html(req: &Request) -> Result<Response> {
         ("IP Address", "row_ip", ip.clone()),
         ("Country", "row_country", cf_country.clone()),
         ("City", "row_city", cf_city.clone()),
-        ("Colo", "row_colo", colo.clone()),
+        ("CF Edge Location", "row_colo", colo.clone()),
         ("X-Real-IP", "row_xreal", x_real_ip.clone()),
         ("X-Forwarded-For", "row_xff", xff.clone()),
         ("User Agent", "row_ua", ua.clone()),
@@ -93,6 +152,12 @@ pub async fn handler_html(req: &Request) -> Result<Response> {
     let normal_css = include_str!("../html/tul_normal.css");
     let mut html = String::from(include_str!("../html/index.html"));
     html = html.replace("<!-- NORMAL_CSS -->", normal_css);
+    let details_script = if env.secret("MAPURL").is_ok() {
+        include_str!("../html/ip_details.js")
+    } else {
+        ""
+    };
+    html = html.replace("/* IP_DETAILS */", details_script);
 
     // CV Tools entry is only shown when the tul_cv feature is compiled in.
     #[cfg(feature = "tul_cv")]
@@ -174,4 +239,26 @@ fn escape_html(s: &str) -> String {
         .replace('<', "&lt;")
         .replace('>', "&gt;")
         .replace('"', "&quot;")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::lookup_ip;
+
+    #[test]
+    fn lookup_ip_validates_query_and_defaults_to_client() {
+        assert_eq!(lookup_ip(None, "1.1.1.1").as_deref(), Some("1.1.1.1"));
+        assert_eq!(
+            lookup_ip(Some("8.8.8.8"), "1.1.1.1").as_deref(),
+            Some("8.8.8.8")
+        );
+        assert_eq!(
+            lookup_ip(Some("2001:db8::1"), "").as_deref(),
+            Some("2001:db8::1")
+        );
+        for invalid in ["", "example.com", "127.0.0.1&ip=8.8.8.8", "<script>"] {
+            assert_eq!(lookup_ip(Some(invalid), "1.1.1.1"), None);
+        }
+        assert_eq!(lookup_ip(None, "unknown"), None);
+    }
 }

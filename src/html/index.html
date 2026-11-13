@@ -8,7 +8,12 @@
 <!-- NORMAL_CSS -->
 body { align-items: flex-start; padding-top: 48px; }
 .container { max-width: 680px; width: 100%; }
-.topbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; }
+.topbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 18px; }
+.topbar-actions { display: flex; align-items: center; gap: 8px; margin-left: auto; max-width: 100%; }
+.ip-lookup { display: flex; gap: 6px; min-width: 0; }
+.ip-lookup[hidden] { display: none; }
+.topbar .ip-lookup input { width: 190px; min-width: 0; padding: 5px 8px; font-size: .78rem; }
+.topbar .ip-lookup button { padding: 5px 10px; font-size: .78rem; }
 .topbar h1 { font-size: 1rem; color: #888; font-weight: 400; margin: 0; }
 .topbar .lang-btn { font-size: .78rem; padding: 5px 12px; }
 table { width: 100%; border-collapse: collapse; }
@@ -27,17 +32,29 @@ tr:last-child td { border-bottom: none; }
 .cli-table td:first-child { font-family: monospace; font-size: .82rem; width: auto; color: #333; }
 .cli-table td:last-child { color: #888; width: 1%; white-space: nowrap; }
 .cli-table .cmd { color: #080; }
+.ip-map { height: 320px; border-radius: 6px; margin-top: 12px; }
+.ip-status { color: #888; font-size: .85rem; }
+.ip-details td:first-child { white-space: normal; }
+.ip-details h3 { font-size: .9rem; font-weight: 400; }
+.ip-details table { table-layout: fixed; }
 </style>
 </head>
 <body>
 <div class="container">
 <div class="topbar">
 <h1 data-i18n="title">Your Connection</h1>
+<div class="topbar-actions">
+<form class="ip-lookup" id="ip-lookup" action="/" method="get" hidden>
+<input type="text" id="lookup-ip" name="ip" aria-label="IPv4 / IPv6" placeholder="IPv4 / IPv6" autocomplete="off" spellcheck="false" required>
+<button class="btn" type="submit" data-i18n="ip_lookup">Look up</button>
+</form>
 <button class="btn lang-btn" id="lang">中文</button>
+</div>
 </div>
 <table>
 <!-- ROWS -->
 </table>
+<div id="ip-details" class="section ip-details" hidden aria-live="polite"></div>
 <div class="section">
 <h2 data-i18n="cli">Command Line Interfaces</h2>
 <table class="cli-table">
@@ -63,7 +80,7 @@ var I18N = {
     tool_dl_name: '加速器', tool_dl_desc: '— 输入 URL 代理网页或下载文件',
     tool_s_name: '搜索', tool_s_desc: '— 通过 DuckDuckGo 或 Startpage 搜索',
     tool_cv_name: 'CV 工具', tool_cv_desc: '— 浏览器端转换工具（图像 / 文本 / 单位）',
-    row_ip: 'IP 地址', row_country: '国家', row_city: '城市', row_colo: '数据中心',
+    row_ip: 'IP 地址', row_country: '国家', row_city: '城市', row_colo: 'CF 边缘节点位置',
     row_xreal: 'X-Real-IP', row_xff: 'X-Forwarded-For', row_ua: 'User Agent', row_lang: '语言',
     row_referer: '来源', row_host: '主机', row_method: '方法', row_encoding: '编码', row_mime: 'MIME 类型'
   },
@@ -73,7 +90,7 @@ var I18N = {
     tool_dl_name: 'Accelerator', tool_dl_desc: '— enter a URL to proxy web pages or download files',
     tool_s_name: 'Search', tool_s_desc: '— web search via DuckDuckGo or Startpage',
     tool_cv_name: 'CV Tools', tool_cv_desc: '— browser-side converters (image / text / unit)',
-    row_ip: 'IP Address', row_country: 'Country', row_city: 'City', row_colo: 'Colo',
+    row_ip: 'IP Address', row_country: 'Country', row_city: 'City', row_colo: 'CF Edge Location',
     row_xreal: 'X-Real-IP', row_xff: 'X-Forwarded-For', row_ua: 'User Agent', row_lang: 'Language',
     row_referer: 'Referer', row_host: 'Host', row_method: 'Method', row_encoding: 'Encoding', row_mime: 'MIME Type'
   }
@@ -85,8 +102,10 @@ function apply() {
   document.title = t.title;
   document.querySelectorAll('[data-i18n]').forEach(function (el) { el.innerHTML = t[el.dataset.i18n] || el.innerHTML; });
   document.getElementById('lang').textContent = lang === 'zh' ? 'EN' : '中文';
+  if (typeof renderIpFields === 'function') renderIpFields();
 }
 document.getElementById('lang').addEventListener('click', function () { lang = lang === 'zh' ? 'en' : 'zh'; localStorage.setItem('lang', lang); apply(); });
+/* IP_DETAILS */
 apply();
 </script>
 </body>
