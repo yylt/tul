@@ -64,8 +64,6 @@
 | Markdown → HTML | Markdown 渲染 | `pulldown-cmark` |
 | 文本去重 / 排序 | 行去重、字母/数字排序 | 纯 Rust |
 | CSV → JSON | 格式转换 | `csv` + `serde_json` |
-| Excel → CSV/JSON | 读取 .xlsx | `calamine` |
-| 生成 Word | 文本/图片转 .docx | `docx-rs` |
 | PDF 提取文本 | 从 PDF 中读取文字 | `lopdf` |
 
 ### 4. 单位转换
@@ -98,13 +96,13 @@
          │ 浏览器加载
          ▼
 ┌─────────────────┐     ┌──────────────────┐
-│  tul_cv UI      │────▶│  WASM 模块        │
+│  tul_cv UI      │────▶│  core WASM 模块   │
 │  (HTML/CSS/JS)  │     │  (Rust→wasm)     │
 │                 │◀────│  - image 转换     │
 │  - 搜索         │     │  - 文本处理       │
 │  - Tab 切换     │     │  - 单位转换       │
 │  - 拖拽上传     │     │  - PDF 生成/解析  │
-│  - 预览下载     │     │  - Excel 读取     │
+│  - 预览下载     │     │                  │
 └─────────────────┘     └──────────────────┘
 ```
 
@@ -130,7 +128,6 @@ tul-cv-wasm/                  # [新增] 独立 bin 项目，编译为 WASM
 │   ├── image.rs              # 图像处理（格式转换、缩放、裁剪、水印）
 │   ├── text.rs               # 文本处理（编码、格式化、Markdown）
 │   ├── pdf.rs                # PDF 生成（pdf-writer）/ 解析（lopdf）
-│   ├── office.rs             # Excel（calamine）+ Word（docx-rs）
 │   ├── unit.rs               # 单位转换
 │   └── ocr.rs                # OCR（如有轻量方案）
 ├── pkg/                      # wasm-pack build 输出
@@ -183,8 +180,6 @@ HTML 页面中通过 `<script type="module">` 加载 WASM 模块。
 | `js-sys` | JS 类型绑定 | ✅ | ArrayBuffer/Uint8Array 互转 |
 | `pdf-writer` | 生成 PDF | ✅ | 纯 Rust |
 | `lopdf` | 解析 PDF | ✅ | 纯 Rust，体积较大 |
-| `calamine` | 读取 Excel (.xlsx) | ✅ | 纯 Rust |
-| `docx-rs` | 生成 .docx | ✅ | 纯 Rust |
 | `pulldown-cmark` | Markdown→HTML | ✅ | 轻量 |
 | `resvg` | SVG→PNG | ✅ | 依赖 tiny-skia，编译慢但可行 |
 | `serde` + `serde_json` | JSON 处理 | ✅ | 已在 Worker 中 |
@@ -193,7 +188,7 @@ HTML 页面中通过 `<script type="module">` 加载 WASM 模块。
 体积控制策略：
 - `image` 仅开启 `png`, `jpeg`, `webp` codec
 - 放弃 `lopdf` 若体积过大，用纯文本方案代替
-- 考虑按功能拆分为多个小 WASM，按需加载（code splitting）
+- 仅保留单个 core WASM 模块，统一加载
 
 ---
 
@@ -340,8 +335,6 @@ wasm-opt -Oz pkg/tul_cv_bg.wasm -o pkg/tul_cv_bg.wasm
 
 ### Phase 3: 文档类
 - [x] 文本→PDF
-- [x] Excel→CSV/JSON
-- [x] 生成 Word
 - [x] CSV→JSON
 
 ### Phase 4: 进阶 & 分发
@@ -352,18 +345,13 @@ wasm-opt -Oz pkg/tul_cv_bg.wasm -o pkg/tul_cv_bg.wasm
 
 ## 实施记录（与提案的差异）
 
-1. **WASM 体积控制（code splitting 落地）**：完整构建约 2MB（gzip 800KB）。
-   按提案"考虑按功能拆分为多个小 WASM，按需加载"拆分：
-   - `tul_cv_wasm_bg.wasm`（core，约 1.1MB / gzip 478KB）：图像、文本、PDF、单位转换
-   - `tul_cv_office_wasm_bg.wasm`（office，约 987KB / gzip 443KB）：Excel 解析、Word 生成，
-     仅当打开对应工具时才动态 `import()` 加载
+1. **单 core WASM 模块**：仅保留 `tul_cv_wasm_bg.wasm`，提供图像、文本、PDF、单位转换能力。
 2. **WebP 编码**：`image` 0.25 仅支持 lossless WebP 编码，质量参数忽略。
 3. **构建工具**：未用 `wasm-pack`，直接 `cargo build --release --target wasm32-unknown-unknown`
-   + `wasm-bindgen --target web --no-typescript`。两个 cv crate 是根目录 workspace 的成员，
+   + `wasm-bindgen --target web --no-typescript`。core crate 是根目录 workspace 的成员，
    与 worker 共用一份 `Cargo.lock`，因此 `wasm-bindgen` 只会解析出一个版本；
    `make cv-wasm` 从 `Cargo.lock` 读出该版本并复用/安装对应的 CLI，不再手写版本号。
 4. **水印字体**：使用 `font8x8`（内置 8x8 位图 ASCII 字形）替代 `imageproc + rusttype`，
    避免字体资产与体积开销。
 5. **分发**：构建产物复制到 `src/html/`，由 Worker `include_bytes!` 内嵌分发
-   （`/tul_cv/tul_cv_wasm.js`、`/tul_cv/tul_cv_wasm_bg.wasm`、`/tul_cv/tul_cv_office_wasm.js`、
-   `/tul_cv/tul_cv_office_wasm_bg.wasm`）。CDN 分发留待 Phase 4。
+   （`/tul_cv/tul_cv_wasm.js`、`/tul_cv/tul_cv_wasm_bg.wasm`）。CDN 分发留待 Phase 4。

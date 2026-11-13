@@ -97,16 +97,6 @@ const ready = init().then(() => { wasmReady = true; }).catch(e => {
   document.getElementById('list').insertAdjacentHTML('beforeend', '<p class="err">WASM load failed: ' + e + '</p>');
 });
 
-// office module is loaded lazily (only when an office tool is opened)
-let officeApi = null;
-async function loadOffice() {
-  if (officeApi) return officeApi;
-  const mod = await import('/tul_cv/tul_cv_office_wasm.js');
-  await mod.default();
-  officeApi = mod;
-  return officeApi;
-}
-
 // ---- i18n -----------------------------------------------------------------
 
 const I18N = {
@@ -124,24 +114,23 @@ const I18N = {
     convert: '转换', generate: '生成', render: '渲染', format: '格式化', minify: '压缩',
     lines_in: '输入（每行一条）', dedupe: '去重', numeric_sort: '数字排序', descending: '降序',
     delimiter: '分隔符', comma: '逗号', semicolon: '分号', tab: '制表符',
-    sheet: '工作表（留空 = 第一个）',
     category: '类别', from: '从', to: '到', invalid: '无效', process: '处理',
     pdf_ascii: '（仅 ASCII，非 ASCII 字符显示为 ?）',
     t_img_png_jpeg: 'PNG → JPEG', t_img_jpeg_png: 'JPEG → PNG', t_img_png_webp: 'PNG → WebP',
     t_img_jpeg_webp: 'JPEG → WebP', t_img_webp_png: 'WebP → PNG', t_img_webp_jpeg: 'WebP → JPEG',
     t_img_resize: '图像缩放', t_img_crop: '图像裁剪', t_img_watermark: '添加水印', t_img_text2img: '文字 → PNG',
-    t_txt_pdf: '文本 → PDF', t_txt_docx: '文本 → Word', t_txt_encode: '编码转换',
+    t_txt_pdf: '文本 → PDF', t_txt_encode: '编码转换',
     t_txt_json: 'JSON 格式化 / 压缩', t_txt_md: 'Markdown → HTML', t_txt_lines: '行去重 / 排序',
-    t_txt_csv_json: 'CSV → JSON', t_txt_xlsx: 'Excel → CSV / JSON', t_unit_conv: '单位转换',
+    t_txt_csv_json: 'CSV → JSON', t_unit_conv: '单位转换',
     d_img_png_jpeg: 'PNG 转 JPEG，可调质量', d_img_jpeg_png: 'JPEG 转 PNG（无损）',
     d_img_png_webp: 'PNG 转 WebP（无损）', d_img_jpeg_webp: 'JPEG 转 WebP（无损）',
     d_img_webp_png: 'WebP 转 PNG', d_img_webp_jpeg: 'WebP 转 JPEG',
     d_img_resize: '按最长边或指定尺寸缩放', d_img_crop: '裁剪指定矩形区域',
     d_img_watermark: '平铺文字水印', d_img_text2img: '文字渲染为 PNG（水印素材）',
-    d_txt_pdf: '纯文本转 PDF 文档', d_txt_docx: '文本生成 .docx 文档',
+    d_txt_pdf: '纯文本转 PDF 文档',
     d_txt_encode: 'Base64 / Hex / GBK 互转', d_txt_json: '格式化或压缩 JSON',
     d_txt_md: 'CommonMark 渲染为 HTML', d_txt_lines: '行去重、字母/数字排序',
-    d_txt_csv_json: 'CSV（含表头）转 JSON', d_txt_xlsx: '读取 .xlsx 第一个工作表',
+    d_txt_csv_json: 'CSV（含表头）转 JSON',
     d_unit_conv: '长度、重量、温度等 8 类单位',
     s_img_png_jpeg: '转换为 JPEG（质量 1-100）', s_img_jpeg_png: '转换为 PNG（无损）',
     s_img_png_webp: '转换为 WebP（无损）', s_img_jpeg_webp: '转换为 WebP（无损）',
@@ -165,24 +154,23 @@ const I18N = {
     convert: 'Convert', generate: 'Generate', render: 'Render', format: 'Format', minify: 'Minify',
     lines_in: 'Input (one per line)', dedupe: 'dedupe', numeric_sort: 'numeric sort', descending: 'descending',
     delimiter: 'Delimiter', comma: 'comma', semicolon: 'semicolon', tab: 'tab',
-    sheet: 'Sheet (empty = first)',
     category: 'Category', from: 'From', to: 'To', invalid: 'invalid', process: 'Process',
     pdf_ascii: ' (ASCII only; non-ASCII becomes ?)',
     t_img_png_jpeg: 'PNG → JPEG', t_img_jpeg_png: 'JPEG → PNG', t_img_png_webp: 'PNG → WebP',
     t_img_jpeg_webp: 'JPEG → WebP', t_img_webp_png: 'WebP → PNG', t_img_webp_jpeg: 'WebP → JPEG',
     t_img_resize: 'Resize', t_img_crop: 'Crop', t_img_watermark: 'Watermark', t_img_text2img: 'Text → PNG',
-    t_txt_pdf: 'Text → PDF', t_txt_docx: 'Text → Word', t_txt_encode: 'Encode / Decode',
+    t_txt_pdf: 'Text → PDF', t_txt_encode: 'Encode / Decode',
     t_txt_json: 'JSON Format / Minify', t_txt_md: 'Markdown → HTML', t_txt_lines: 'Dedupe / Sort Lines',
-    t_txt_csv_json: 'CSV → JSON', t_txt_xlsx: 'Excel → CSV / JSON', t_unit_conv: 'Unit Converter',
+    t_txt_csv_json: 'CSV → JSON', t_unit_conv: 'Unit Converter',
     d_img_png_jpeg: 'Convert PNG to JPEG with quality control', d_img_jpeg_png: 'Convert JPEG to PNG (lossless)',
     d_img_png_webp: 'Convert PNG to WebP (lossless)', d_img_jpeg_webp: 'Convert JPEG to WebP (lossless)',
     d_img_webp_png: 'Convert WebP to PNG', d_img_webp_jpeg: 'Convert WebP to JPEG',
     d_img_resize: 'Scale by longest side or exact size', d_img_crop: 'Crop a rectangular region',
     d_img_watermark: 'Tile text watermark across image', d_img_text2img: 'Render text to PNG (watermark source)',
-    d_txt_pdf: 'Render plain text into a PDF', d_txt_docx: 'Generate a .docx document from text',
+    d_txt_pdf: 'Render plain text into a PDF',
     d_txt_encode: 'Base64, Hex, UTF-8 \u2194 GBK', d_txt_json: 'Pretty-print or compress JSON',
     d_txt_md: 'Render CommonMark to an HTML fragment', d_txt_lines: 'Dedupe lines, sort alphabetically or numerically',
-    d_txt_csv_json: 'Convert CSV (with header row) to JSON', d_txt_xlsx: 'Read the first worksheet of an .xlsx',
+    d_txt_csv_json: 'Convert CSV (with header row) to JSON',
     d_unit_conv: 'Length, weight, temperature, area, volume, speed, data, time',
     s_img_png_jpeg: 'Convert to JPEG (quality 1-100)', s_img_jpeg_png: 'Convert to PNG (lossless)',
     s_img_png_webp: 'Convert to WebP (lossless)', s_img_jpeg_webp: 'Convert to WebP (lossless)',
@@ -221,13 +209,11 @@ const TOOLS = [
   { id: 'img_watermark', cat: 'image', icon: '💧' },
   { id: 'img_text2img', cat: 'image', icon: '🔤' },
   { id: 'txt_pdf', cat: 'text', icon: '📄' },
-  { id: 'txt_docx', cat: 'text', icon: '📝' },
   { id: 'txt_encode', cat: 'text', icon: '🔁' },
   { id: 'txt_json', cat: 'text', icon: '🧾' },
   { id: 'txt_md', cat: 'text', icon: '📋' },
   { id: 'txt_lines', cat: 'text', icon: '📃' },
   { id: 'txt_csv_json', cat: 'text', icon: '📊' },
-  { id: 'txt_xlsx', cat: 'text', icon: '📗' },
   { id: 'unit_conv', cat: 'unit', icon: '📏' },
 ];
 
@@ -313,8 +299,8 @@ function renderPanel(el, x) {
   const builders = { img_png_jpeg: panelConvert, img_jpeg_png: panelConvert, img_png_webp: panelConvert,
     img_jpeg_webp: panelConvert, img_webp_png: panelConvert, img_webp_jpeg: panelConvert,
     img_resize: panelResize, img_crop: panelCrop, img_watermark: panelWatermark, img_text2img: panelTextImage,
-    txt_pdf: panelTextOut, txt_docx: panelTextOut, txt_encode: panelEncode, txt_json: panelJson,
-    txt_md: panelMd, txt_lines: panelLines, txt_csv_json: panelCsvJson, txt_xlsx: panelXlsx,
+    txt_pdf: panelTextOut, txt_encode: panelEncode, txt_json: panelJson,
+    txt_md: panelMd, txt_lines: panelLines, txt_csv_json: panelCsvJson,
     unit_conv: panelUnit };
   el.innerHTML = (builders[x.id] || panelFallback)(x);
   bindPanel(x, el);
@@ -451,10 +437,9 @@ function panelTextImage() {
 // ---- text panels ----------------------------------------------------------
 
 function panelTextOut(x) {
-  const isDocx = x.id === 'txt_docx';
   return '<h2 data-i18n="t_' + x.id + '">' + toolName(x) + '</h2>' +
     '<p class="sub" data-i18n="d_' + x.id + '">' + toolDesc(x) +
-    (x.id === 'txt_pdf' ? '<span data-i18n="pdf_ascii"></span>' : '') + '</p>' +
+    '<span data-i18n="pdf_ascii"></span>' + '</p>' +
     '<div class="field"><label data-i18n="title_opt">Title (optional)</label><input type="text" id="title" value="" style="width:100%"></div>' +
     '<div class="field"><label data-i18n="text">Text</label><textarea id="src" placeholder="..."></textarea></div>' +
     '<div class="row"><button class="btn" id="go" data-i18n="generate">Generate</button></div>' +
@@ -512,15 +497,6 @@ function panelCsvJson() {
     '<div class="field"><div class="row"><label data-i18n="delimiter">Delimiter</label>' +
     '<select id="delim"><option value="," data-i18n="comma">comma</option><option value=";" data-i18n="semicolon">semicolon</option><option value="\t" data-i18n="tab">tab</option></select>' +
     '<button class="btn" id="go" data-i18n="convert">Convert</button></div></div>' +
-    '<div class="field"><label data-i18n="result">Result</label><textarea id="out" class="out" readonly></textarea></div>' +
-    '<div class="result"></div>';
-}
-
-function panelXlsx() {
-  return '<h2 data-i18n="t_txt_xlsx">Excel → CSV / JSON</h2><p class="sub" data-i18n="d_txt_xlsx"></p>' +
-    fileInput('.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet') +
-    '<div class="field" style="margin-top:14px"><div class="row"><label data-i18n="sheet">Sheet (empty = first)</label><input type="text" id="sheet" style="width:150px">' +
-    '<button class="btn" id="csv">CSV</button><button class="btn" id="json">JSON</button></div></div>' +
     '<div class="field"><label data-i18n="result">Result</label><textarea id="out" class="out" readonly></textarea></div>' +
     '<div class="result"></div>';
 }
@@ -706,18 +682,15 @@ function bindPanel(x, el) {
         fname: () => 'text.png',
       });
       break;
-    case 'txt_pdf': case 'txt_docx': {
+    case 'txt_pdf': {
       const btn = el.querySelector('#go');
       btn.onclick = () => run(async () => {
         const text = el.querySelector('#src').value;
-        const out = x.id === 'txt_pdf'
-          ? text_to_pdf(text, el.querySelector('#title').value || '')
-          : (await loadOffice()).text_to_docx(text);
-        const ext = x.id === 'txt_pdf' ? 'pdf' : 'docx';
+        const out = text_to_pdf(text, el.querySelector('#title').value || '');
         const r = el.querySelector('.result');
-        r.innerHTML = outMeta(out, 'document.' + ext) + '<div class="actions"><button class="btn" id="dl" data-i18n="download">Download</button></div>';
+        r.innerHTML = outMeta(out, 'document.pdf') + '<div class="actions"><button class="btn" id="dl" data-i18n="download">Download</button></div>';
         applyLang();
-        r.querySelector('#dl').onclick = () => download(out, 'document.' + ext);
+        r.querySelector('#dl').onclick = () => download(out, 'document.pdf');
       });
       break;
     }
@@ -764,22 +737,6 @@ function bindPanel(x, el) {
         const d = el.querySelector('#delim').value;
         el.querySelector('#out').value = csv_to_json(el.querySelector('#src').value, d);
       });
-      break;
-    }
-    case 'txt_xlsx': {
-      const box = { f: null };
-      const doConv = async (asJson) => {
-        if (!box.f) return;
-        const buf = await box.f.arrayBuffer();
-        const sheet = el.querySelector('#sheet').value || '';
-        const api = await loadOffice();
-        el.querySelector('#out').value = asJson
-          ? api.xlsx_to_json(new Uint8Array(buf), sheet)
-          : api.xlsx_to_csv(new Uint8Array(buf), sheet);
-      };
-      bindDropzone(el, '.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', f => { box.f = f; doConv(false); });
-      el.querySelector('#csv').onclick = () => run(() => doConv(false));
-      el.querySelector('#json').onclick = () => run(() => doConv(true));
       break;
     }
     case 'unit_conv': {

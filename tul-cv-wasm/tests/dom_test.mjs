@@ -34,7 +34,7 @@ script = script.replace(/import init, \{[\s\S]*?\} from '\/tul_cv\/tul_cv_wasm\.
 
 // jsdom can't run <script type=module>; inject as classic script
 const wrapped = '<!DOCTYPE html><html><body><div class="container">' +
-  '<div class="topbar"><h1 id="title" data-i18n="title"></h1><button id="lang"></button></div>' +
+  '<div class="topbar"><h1 data-i18n="title"></h1><button id="lang"></button></div>' +
   '<input id="search">' +
   '<div class="tabs" id="tabs">' +
   '<button class="tab active" data-tab="all" data-i18n="tab_all">All</button>' +
@@ -62,9 +62,17 @@ const ok = (n, c) => { console.log((c ? 'PASS' : 'FAIL') + ' ' + n); c ? pass++ 
 
 const items = () => [...document.querySelectorAll('.tool-item')];
 
-// 1. 19 items, vertical list
+// 1. 17 items, vertical list
 const all = items();
-ok('19 items rendered', all.length === 19);
+ok('17 items rendered', all.length === 17);
+ok('Office tools removed', !all.some(x => ['txt_docx', 'txt_xlsx'].includes(x.dataset.id)));
+const pdf = all.find(x => x.dataset.id === 'txt_pdf');
+pdf.querySelector('.tool-head').click();
+const pdfBody = pdf.querySelector('.tool-body');
+pdfBody.querySelector('#src').value = 'hello';
+pdfBody.querySelector('#go').click();
+await new Promise(r => setTimeout(r, 0));
+ok('PDF generation still works', pdfBody.querySelector('.result').textContent.includes('document.pdf'));
 
 // 2. accordion: open first
 all[0].querySelector('.tool-head').click();
